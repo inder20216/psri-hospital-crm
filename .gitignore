@@ -1,0 +1,22 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+*.sw?
+*.pem
+
+# PSRI — workflows contain API credentials, never commit
+PSRI/Workflows/*
+# ...except the PHP workflow API code + its setup notes (credentials stay local in config.php)
+!PSRI/Workflows/php/
+!PSRI/Workflows/IMPORT_NOTES.md
+PSRI/Workflows/php/config.php
+# Large binary/reference files
+PSRI/*.pdf
+PSRI/*.xlsx
+PSRI/*.xls
+PSRI/*.doc
+PSRI/*.docx
+PSRI/*.ps1
+PSRI/corporate_chunks.json
