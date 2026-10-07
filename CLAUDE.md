@@ -38,8 +38,7 @@ VMM is present as a placeholder stub only — all real VMM work lives in `../vmm
 - Editor UI never names the backend (hard rule). Setup/deploy steps: `PSRI/Workflows/IMPORT_NOTES.md`.
 
 ## SparkTG CTI
-- Agent login in the React app: `10167201` / `agent007`
-- n8n workflows use: `10167200` / `admin`
+- Agent login credentials (React app + n8n workflows) — ask Inder, not stored in the repo.
 - Incoming call flow: DialerPanel fires → auto-navigate to Cases form. Contact found → pre-fill. Not found → Quick Add modal auto-opens. No manual click needed.
 
 ## Dev
