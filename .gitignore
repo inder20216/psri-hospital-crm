@@ -4,6 +4,7 @@ dist-ssr
 *.local
 .DS_Store
 *.sw?
+*.pem
 
 # PSRI — workflows contain API credentials, never commit
 PSRI/Workflows/*
