@@ -137,8 +137,10 @@ export default function ProjectRail() {
           </Link>
         )}
 
-        {/* New picklist value approval — Admin and Super Admin */}
-        {isAdmin && (
+        {/* New picklist value approval (Admin/Super Admin) — or, for any other
+            signed-in user, a read-only look at what happened to their own
+            suggestions (approved/rejected/corrected). */}
+        {currentUser && (
           <Link
             to="/admin/picklist-suggestions"
             className={`rail-item ${pathname === '/admin/picklist-suggestions' ? 'active' : ''}`}

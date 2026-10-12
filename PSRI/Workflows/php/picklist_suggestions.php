@@ -111,7 +111,15 @@ function ps_list(string $status): array {
     ], $st->fetchAll());
 }
 
-/** Approves or rejects one suggestion; on approve, pushes the value live via n8n. */
+/**
+ * Approves or rejects one suggestion; on approve, pushes the value live via
+ * n8n. A reviewer can correct the text before approving (fixing a typo/
+ * casing issue rather than rejecting outright) — the stored suggestion's
+ * `value` is updated to whatever was actually approved, so the agent who
+ * submitted it sees the corrected version, not their original typo. A
+ * correction sent alongside a rejection is ignored — rejecting means "no",
+ * not "approve this edited version".
+ */
 function ps_review(array $b): array {
     $id = (int) ($b['id'] ?? 0);
     if ($id <= 0) return ['error' => 'Suggestion id is required'];
@@ -129,15 +137,18 @@ function ps_review(array $b): array {
 
     $approved = !empty($b['approved']);
     $status = $approved ? 'approved' : 'rejected';
-    $pdo->prepare('UPDATE picklist_suggestions SET status = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = NOW() WHERE id = ?')
-        ->execute([$status, $reviewerId, $reviewerName, $id]);
+    $correctedValue = trim((string) ($b['correctedValue'] ?? ''));
+    $finalValue = ($approved && $correctedValue !== '') ? $correctedValue : $row['value'];
+
+    $pdo->prepare('UPDATE picklist_suggestions SET status = ?, value = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = NOW() WHERE id = ?')
+        ->execute([$status, $finalValue, $reviewerId, $reviewerName, $id]);
 
     $pushWarning = '';
     if ($approved) {
         $ctx = stream_context_create(['http' => [
             'method' => 'POST', 'timeout' => 8, 'ignore_errors' => true,
             'header' => "Content-Type: application/json\r\n",
-            'content' => json_encode(['listName' => $row['list_name'], 'value' => $row['value']]),
+            'content' => json_encode(['listName' => $row['list_name'], 'value' => $finalValue]),
         ]]);
         $res = @file_get_contents(PS_N8N_BASE . '/psri-picklist-add', false, $ctx);
         $data = $res !== false ? json_decode($res, true) : null;
@@ -146,5 +157,5 @@ function ps_review(array $b): array {
         }
     }
 
-    return ['id' => $id, 'message' => $approved ? 'Suggestion approved' : 'Suggestion rejected', 'warning' => $pushWarning];
+    return ['id' => $id, 'value' => $finalValue, 'message' => $approved ? 'Suggestion approved' : 'Suggestion rejected', 'warning' => $pushWarning];
 }
