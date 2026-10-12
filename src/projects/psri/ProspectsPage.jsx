@@ -365,6 +365,18 @@ export default function ProspectsPage() {
                   {p.attempts > 0 && <span className="psri-badge">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''}</span>}
                 </div>
                 {p.enquiryTypes && <div className="cp-hint" style={{ margin: '2px 0 0' }}>{p.enquiryTypes}</div>}
+                {/* Once an agent has actually worked the lead, their own remark is
+                    more relevant than the original call — only fall back to the
+                    enquiry summary while nobody's touched it yet (remarks empty). */}
+                {(p.remarks || p.originalSummary) && (
+                  <div
+                    className="cp-hint"
+                    style={{ margin: '2px 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                    title={p.remarks || p.originalSummary}
+                  >
+                    {p.remarks ? `📝 ${p.remarks}` : `📞 ${p.originalSummary}`}
+                  </div>
+                )}
                 {isAdmin && (
                   <div className="cp-hint" style={{ margin: '2px 0 0' }}>
                     {p.assignedTo ? (users.find(u => u.id === p.assignedTo)?.name || 'Unknown agent') : 'Unassigned'}

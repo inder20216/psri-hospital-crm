@@ -26,17 +26,27 @@ function prospects_row_to_api(array $r): array {
         'created'       => $r['created']         ?? '',
         'enquiryCount'  => $r['enquiry_count']   ?? 0,
         'enquiryTypes'  => $r['enquiry_types']   ?? '',
+        'originalSummary' => $r['original_summary'] ?? '',
     ];
 }
 
-/** $status defaults to 'Followup' (the open-prospects view), matching the n8n version. */
+/**
+ * $status defaults to 'Followup' (the open-prospects view), matching the n8n version.
+ * original_summary is the summary of whichever case first created this prospect (the
+ * original inbound enquiry) — the list page falls back to it for a lead nobody has
+ * worked yet, since remarks is empty until an agent actually types one.
+ */
 function prospects_list(string $status, int $limit): array {
     $status = $status !== '' ? $status : 'Followup';
     $limit = min(max($limit > 0 ? $limit : 200, 1), 2000);
 
     $pdo = psri_db();
     $st = $pdo->prepare(
-        "SELECT p.*, COUNT(pec.case_id) AS enquiry_count, GROUP_CONCAT(DISTINCT NULLIF(c.type_of_enquiry, '') SEPARATOR ', ') AS enquiry_types
+        "SELECT p.*, COUNT(pec.case_id) AS enquiry_count, GROUP_CONCAT(DISTINCT NULLIF(c.type_of_enquiry, '') SEPARATOR ', ') AS enquiry_types,
+            (SELECT c2.summary FROM prospect_enquiry_cases pec2
+               JOIN cases c2 ON c2.case_id = pec2.case_id
+               WHERE pec2.prospect_id = p.prospect_id
+               ORDER BY pec2.linked_at ASC LIMIT 1) AS original_summary
          FROM prospects p
          LEFT JOIN prospect_enquiry_cases pec ON pec.prospect_id = p.prospect_id
          LEFT JOIN cases c ON c.case_id = pec.case_id
