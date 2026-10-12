@@ -2,9 +2,13 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
-  base: '/crm-psri-testing/',
+  // Only the production build needs the GitHub Pages subpath — the dev
+  // server serves from root, and MSAL's redirect URI (window.location.origin
+  // + BASE_URL) must match what's actually registered in Azure for
+  // localhost, which is the plain root, not /psri-hospital-crm/.
+  base: command === 'build' ? '/psri-hospital-crm/' : '/',
   server: {
     proxy: {
       // Workflow automation PHP API — run it locally with:
@@ -22,4 +26,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

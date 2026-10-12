@@ -126,6 +126,9 @@ export default function ProspectsPage() {
   const [loading, setLoading]     = useState(true);
   const [loadErr, setLoadErr]     = useState('');
   const [selected, setSelected]   = useState(null);
+  const [selectedIds, setSelectedIds]     = useState(new Set()); // bulk-assign checkboxes — Admin/Super Admin only
+  const [bulkAssignTo, setBulkAssignTo]   = useState('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
   const [edit, setEdit]           = useState(emptyEdit);
   const [saving, setSaving]       = useState(false);
   const [saveErr, setSaveErr]     = useState('');
@@ -245,6 +248,38 @@ export default function ProspectsPage() {
     }
   };
 
+  const toggleSelect = (id, e) => {
+    e.stopPropagation(); // don't also open the detail panel
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // Reassigns every checked lead in one pass. Only `assignedTo` is sent per
+  // prospect — prospects_update() keeps every other field at its current
+  // value when a key is omitted, so this never touches call status, remarks,
+  // etc. on the leads it's reassigning.
+  const handleBulkAssign = async () => {
+    if (!bulkAssignTo || selectedIds.size === 0) return;
+    setBulkAssigning(true);
+    try {
+      await Promise.all([...selectedIds].map(id => psri.updateProspect({
+        id, assignedTo: bulkAssignTo,
+        agentId: currentUser?.id || '', agentName: currentUser?.name || '',
+      })));
+      showToast(`${selectedIds.size} lead${selectedIds.size !== 1 ? 's' : ''} assigned`);
+      setSelectedIds(new Set());
+      setBulkAssignTo('');
+      await refresh();
+    } catch (err) {
+      showToast(err.message || 'Could not assign leads — please try again.');
+    } finally {
+      setBulkAssigning(false);
+    }
+  };
+
   const handleCall = (p) => {
     pendingCallProspect.current = p.id;
     dial(p.contactMobile, { origin: 'prospect', refId: p.id });
@@ -288,12 +323,39 @@ export default function ProspectsPage() {
 
       <div className="psri-layout">
         <div className="psri-list">
+          {isAdmin && selectedIds.size > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+              padding: '10px 12px', marginBottom: 10, borderRadius: 10,
+              background: 'var(--psri-bg-soft, #f1f5f9)', border: '1px solid var(--psri-border)',
+            }}>
+              <strong style={{ fontSize: 13 }}>{selectedIds.size} selected</strong>
+              <select value={bulkAssignTo} onChange={e => setBulkAssignTo(e.target.value)} style={{ flex: '1 1 160px' }}>
+                <option value="">Assign to…</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+              </select>
+              <button type="button" className="psri-btn-primary" disabled={!bulkAssignTo || bulkAssigning} onClick={handleBulkAssign}>
+                {bulkAssigning ? 'Assigning…' : 'Assign'}
+              </button>
+              <button type="button" className="psri-btn-ghost" onClick={() => setSelectedIds(new Set())}>Clear</button>
+            </div>
+          )}
+
           {loading && <div className="psri-empty">Loading prospects…</div>}
           {!loading && !loadErr && prospects.length === 0 && (
             <div className="psri-empty">No open prospects right now — every enquiry has been converted or closed out.</div>
           )}
           {!loading && prospects.map(p => (
             <div key={p.id} className={`psri-contact-card ${selected?.id === p.id ? 'active' : ''}`} onClick={() => select(p)}>
+              {isAdmin && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(p.id)}
+                  onClick={e => toggleSelect(p.id, e)}
+                  onChange={() => {}}
+                  style={{ marginRight: 4, cursor: 'pointer' }}
+                />
+              )}
               <div className="psri-avatar">{(p.contactName || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')}</div>
               <div className="psri-contact-main">
                 <div className="psri-contact-name">{p.contactName || 'Unknown Contact'}</div>
@@ -303,6 +365,11 @@ export default function ProspectsPage() {
                   {p.attempts > 0 && <span className="psri-badge">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''}</span>}
                 </div>
                 {p.enquiryTypes && <div className="cp-hint" style={{ margin: '2px 0 0' }}>{p.enquiryTypes}</div>}
+                {isAdmin && (
+                  <div className="cp-hint" style={{ margin: '2px 0 0' }}>
+                    {p.assignedTo ? (users.find(u => u.id === p.assignedTo)?.name || 'Unknown agent') : 'Unassigned'}
+                  </div>
+                )}
               </div>
             </div>
           ))}

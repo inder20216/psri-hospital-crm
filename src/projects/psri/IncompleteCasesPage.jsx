@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { psri } from '../../api/psri';
 import { useSparkTG } from '../../context/SparkTGContext';
+import { useAuth } from '../../context/AuthContext';
 import './Psri.css';
 
 function fmtWhen(iso) {
@@ -12,6 +13,7 @@ function fmtWhen(iso) {
 export default function IncompleteCasesPage() {
   const navigate = useNavigate();
   const { setDialerPrefill } = useSparkTG();
+  const { currentUser, isAdmin } = useAuth();
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
@@ -21,7 +23,11 @@ export default function IncompleteCasesPage() {
     setLoadErr('');
     return psri.getCases({ status: 'Incomplete' })
       .then(async (res) => {
-        const rows = res.cases || [];
+        // Non-admins only see drafts they themselves left incomplete — an
+        // Incomplete case sitting on someone else's desk isn't theirs to
+        // resume. Admins/Super Admins still see everyone's, same as Cases.
+        const all = res.cases || [];
+        const rows = isAdmin ? all : all.filter(c => c.assignedTo === currentUser?.id);
 
         // Only the (usually few) drafts that actually captured a call get a
         // recording lookup — one lookup per row, in parallel.
@@ -39,7 +45,7 @@ export default function IncompleteCasesPage() {
       })
       .catch(() => setLoadErr('Could not load incomplete cases. Please try again.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin, currentUser]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

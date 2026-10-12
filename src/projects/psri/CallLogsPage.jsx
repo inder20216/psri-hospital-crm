@@ -327,6 +327,7 @@ export default function CallLogsPage() {
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             {cs.callFor && <span className="psri-badge">{cs.callFor}</span>}
                             {cs.status && <span className="psri-badge">{cs.status}</span>}
+                            {cs.isTransfer && <span className="psri-badge">→ {cs.transferredTo || 'Transferred'}</span>}
                           </div>
                           {cs.summary && <p className="psri-table-case-summary">{cs.summary}</p>}
                         </div>
