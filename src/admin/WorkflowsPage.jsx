@@ -71,6 +71,7 @@ export default function WorkflowsPage() {
       <div className="admin-top-actions">
         <button onClick={() => navigate('/admin/workflows/new?template=new-contact')}>+ New Contact Workflow</button>
         <button onClick={() => navigate('/admin/workflows/new?template=new-case')}>+ New Case Workflow</button>
+        <button onClick={() => navigate('/admin/workflows/new?template=case-whatsapp')}>+ Case WhatsApp Alerts</button>
       </div>
 
       {error && <div className="admin-err-banner">{error}</div>}

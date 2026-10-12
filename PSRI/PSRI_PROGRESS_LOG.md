@@ -6,6 +6,34 @@ To add today's entry: copy the template at the very bottom of this file, fill it
 
 ---
 
+## 2026-10-09 — WhatsApp case alerts to departments
+
+**Shipped:**
+- "Case WhatsApp Alerts" automation built from the client's notification process document and switched on (Active): when an agent saves a new case, the CRM sends a WhatsApp alert to the right department for each condition the case matches
+- Routing covers all four client templates: Call Back → Report / Billing / Appointment / Front Desk by the type of enquiry; High Value → Transplant Coordination for transplant enquiries, otherwise the Cardiac / Orthopaedics / Oncology / Neuro / General desk; Complaint / Feedback → Patient Relations plus the department the complaint is about (doctor, charges, emergency, staff or waiting time)
+- Routing uses the CRM's live dropdown values and was checked against sample cases — every route went to the right desk; a case can raise several alerts at once
+- Messages follow the client's wording exactly (name, number, concern, and location for transplant cases); all alerts currently go to one test number (9667224319)
+- Can send through the hospital's verified (green-tick) WhatsApp business number via the official WhatsApp Business Platform, including to department WhatsApp groups (up to 8 staff each, joined by invite link)
+- Workflow designer improvements: each step can be given a readable name, more case fields can be used in conditions, and a missing WhatsApp number now shows as a warning instead of blocking the save
+- Workflow documentation written (flow diagram, alert table, message templates, setup steps) as a shared document, Markdown and Word
+
+**In Progress:**
+- Connecting the hospital's WhatsApp business account so alerts are actually delivered (the automation is ready; delivery is waiting on account details)
+- Email alerts: a fix for emails not being sent is written but not yet tested
+
+**Blocked:**
+- WhatsApp account details: the business number's ID and a permanent access key from the WhatsApp Business account
+- Approval of the four WhatsApp message templates (Call Back, High Value Case, Transplant Program, Complaint / Feedback) — must be submitted in WhatsApp Manager
+- Server access for moving the automation service onto the company web server (alerts only run while the development PC's service is running)
+
+**Next:**
+- Send a first test message from the green-tick number once account details are added
+- Create the department WhatsApp groups and share their invite links with staff
+- Confirm the department routing and the real recipient numbers / groups with the client
+- Run a live test case end to end and check delivery in the workflow History tab
+
+---
+
 ## 2026-09-25 — Workflow automation (new contact / new case)
 
 **Shipped:**

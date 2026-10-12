@@ -233,6 +233,10 @@ function wf_resolve($tpl, array $ctx, bool $json = false): string {
  * anything else is a contact field, falling back to the case.
  */
 function wf_field_value(array $ctx, string $field): string {
+    // Computed: any of the procedure / specialty / enquiry fields (e.g. "contains Transplant").
+    if ($field === 'case.procedureOrSpecialty') {
+        return implode(' | ', array_map(fn ($k) => wf_scalar($ctx['case'][$k] ?? ''), ['typeOfProcedure', 'nameOfProcedure', 'specialtyEnquiredFor', 'typeOfEnquiry']));
+    }
     if (str_starts_with($field, 'case.')) return wf_scalar($ctx['case'][substr($field, 5)] ?? '');
     if (array_key_exists($field, $ctx['contact'])) return wf_scalar($ctx['contact'][$field]);
     if (array_key_exists($field, $ctx['case'])) return wf_scalar($ctx['case'][$field]);
@@ -290,35 +294,201 @@ function wf_db_error(PDOException $e): string {
     return 'Database rejected the change' . ($msg !== '' ? ': ' . $msg : '.');
 }
 
-/** Minimal HTTP client — curl when available, PHP streams otherwise. Returns [status, error]. */
-function wf_http(string $method, string $url, $body = null): array {
-    if (!preg_match('#^https?://#i', $url)) return [0, 'URL must start with http:// or https://'];
+/**
+ * Sends a plain-text email. Uses the SMTP server in config.php ('smtp' =>
+ * host, port, secure, user, pass) when a host is set, otherwise PHP mail()
+ * (which needs sendmail / postfix on the host). Returns an error string ('' on success).
+ */
+function wf_mail_send(string $from, array $to, string $subject, string $body): string {
+    $smtp = psri_config()['smtp'] ?? [];
+    if (trim((string) ($smtp['host'] ?? '')) !== '') return wf_smtp_send($smtp, $from, $to, $subject, $body);
+    $headers = "From: {$from}\r\nContent-Type: text/plain; charset=UTF-8";
+    if (@mail(implode(', ', $to), '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers)) return '';
+    return 'Email sending is not set up on this server — ask an administrator to configure the mail server';
+}
+
+/** Minimal SMTP client: STARTTLS (secure=tls, port 587) or implicit TLS (ssl, 465) or plain (none), AUTH LOGIN. */
+function wf_smtp_send(array $smtp, string $from, array $to, string $subject, string $body): string {
+    $host = trim((string) $smtp['host']);
+    $secure = strtolower(trim((string) ($smtp['secure'] ?? 'tls'))) ?: 'tls';
+    $port = (int) ($smtp['port'] ?? 0) ?: ($secure === 'ssl' ? 465 : ($secure === 'none' ? 25 : 587));
+    if ($secure !== 'none' && !extension_loaded('openssl')) return 'Email needs encryption support (the PHP openssl extension) enabled on this server';
+
+    $fp = @stream_socket_client(($secure === 'ssl' ? 'ssl://' : 'tcp://') . "{$host}:{$port}", $errno, $errstr, 15);
+    if (!$fp) return 'Could not reach the mail server';
+    stream_set_timeout($fp, 15);
+
+    // Reads one (possibly multi-line) reply; returns [code, text].
+    $reply = function () use ($fp): array {
+        $text = '';
+        while (($line = fgets($fp, 1024)) !== false) {
+            $text .= $line;
+            if (strlen($line) < 4 || $line[3] !== '-') break;
+        }
+        return [(int) substr($text, 0, 3), trim($text)];
+    };
+    $send = function (?string $line, array $ok, string $what) use ($fp, $reply): string {
+        if ($line !== null) fwrite($fp, $line . "\r\n");
+        [$code, $text] = $reply();
+        return in_array($code, $ok, true) ? '' : "Mail server refused {$what}" . ($code ? " ({$code})" : ' (no reply)');
+    };
+    $addr = fn (string $s) => preg_match('/<([^>]+)>/', $s, $m) ? trim($m[1]) : trim($s);
+    $ehlo = 'EHLO ' . (gethostname() ?: 'localhost');
+
+    try {
+        if ($e = $send(null, [220], 'the connection')) return $e;
+        if ($e = $send($ehlo, [250], 'the greeting')) return $e;
+        if ($secure === 'tls') {
+            if ($e = $send('STARTTLS', [220], 'encryption')) return $e;
+            if (!@stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) return 'Could not start an encrypted connection to the mail server';
+            if ($e = $send($ehlo, [250], 'the greeting')) return $e;
+        }
+        $user = (string) ($smtp['user'] ?? '');
+        if ($user !== '') {
+            if ($e = $send('AUTH LOGIN', [334], 'login')) return $e;
+            if ($e = $send(base64_encode($user), [334], 'login')) return $e;
+            if ($e = $send(base64_encode((string) ($smtp['pass'] ?? '')), [235], 'the login — check the mail username / password')) return $e;
+        }
+        if ($e = $send('MAIL FROM:<' . $addr($from) . '>', [250], "the sender {$addr($from)}")) return $e;
+        foreach ($to as $rcpt) {
+            if ($e = $send('RCPT TO:<' . $addr($rcpt) . '>', [250, 251], "the recipient {$rcpt}")) return $e;
+        }
+        if ($e = $send('DATA', [354], 'the message')) return $e;
+        // Base64 body: no line can start with "." so no dot-stuffing is needed.
+        $msg = implode("\r\n", [
+            'Date: ' . date('r'),
+            "From: {$from}",
+            'To: ' . implode(', ', $to),
+            'Subject: =?UTF-8?B?' . base64_encode($subject) . '?=',
+            'MIME-Version: 1.0',
+            'Content-Type: text/plain; charset=UTF-8',
+            'Content-Transfer-Encoding: base64',
+            '',
+            rtrim(chunk_split(base64_encode($body), 76, "\r\n")),
+        ]);
+        if ($e = $send($msg . "\r\n.", [250], 'the message')) return $e;
+        fwrite($fp, "QUIT\r\n");
+        return '';
+    } finally {
+        fclose($fp);
+    }
+}
+
+/** WhatsApp recipient → digits with country code; a bare 10-digit number is Indian (91). '' if unusable. */
+function wf_wa_number(string $s): string {
+    $d = ltrim(wf_digits($s), '0');
+    if (strlen($d) === 10) $d = '91' . $d;
+    return strlen($d) >= 11 && strlen($d) <= 15 ? $d : '';
+}
+
+/**
+ * Sends one WhatsApp message via the provider in config.php ('whatsapp' => …).
+ * provider 'meta' = Meta WhatsApp Cloud API: an approved template when
+ * $tpl['name'] is set (needed outside the 24-hour customer-service window),
+ * otherwise plain text. Any other provider: generic HTTP POST — url, token and
+ * a JSON body template with {{to}} / {{message}}; templates are not used.
+ * Returns an error string ('' on success).
+ */
+function wf_whatsapp_send(string $to, string $message, array $tpl = []): string {
+    $cfg = psri_config()['whatsapp'] ?? [];
+    if (strtolower(trim((string) ($cfg['provider'] ?? ''))) === 'meta') return wf_whatsapp_meta($cfg, $to, $message, $tpl);
+    if (str_starts_with($to, 'group:')) return 'WhatsApp groups need the Meta provider';
+    if ($message === '') return 'WhatsApp message is empty';
+    $url = trim((string) ($cfg['url'] ?? ''));
+    if ($url === '') return 'WhatsApp sending is not set up yet — ask an administrator to configure it';
+    $tpl = trim((string) ($cfg['body'] ?? '')) ?: '{"to":"{{to}}","message":"{{message}}"}';
+    $esc = fn (string $s) => substr((string) json_encode($s, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), 1, -1);
+    $body = json_decode(str_replace(['{{to}}', '{{message}}'], [$esc($to), $esc($message)], $tpl), true);
+    if ($body === null) return 'WhatsApp request template is not valid JSON';
+    $token = trim((string) ($cfg['token'] ?? ''));
+    [, $err] = wf_http('POST', $url, $body, $token !== '' ? ['Authorization: Bearer ' . $token] : []);
+    return $err;
+}
+
+/**
+ * Calls the Meta Graph API with the configured WhatsApp credentials.
+ * $path is relative to the API version, e.g. "<phone_number_id>/messages".
+ * Returns [ok, decoded response, error string].
+ */
+function wf_meta_api(string $method, string $path, ?array $body = null): array {
+    $cfg = psri_config()['whatsapp'] ?? [];
+    $token = trim((string) ($cfg['token'] ?? ''));
+    if (trim((string) ($cfg['phone_number_id'] ?? '')) === '' || $token === '') return [false, [], 'WhatsApp sending is not set up yet — ask an administrator to configure it'];
+    if (!extension_loaded('openssl')) return [false, [], 'WhatsApp needs encryption support (the PHP openssl extension) enabled on this server'];
+    $version = trim((string) ($cfg['api_version'] ?? '')) ?: 'v25.0';
+    [$code, $err, $resp] = wf_http($method, "https://graph.facebook.com/{$version}/" . ltrim($path, '/'), $body, ['Authorization: Bearer ' . $token]);
+    $json = json_decode((string) $resp, true) ?: [];
+    if ($code >= 200 && $code < 300) return [true, $json, ''];
+    $e = $json['error'] ?? [];
+    $detail = trim((string) ($e['error_data']['details'] ?? $e['message'] ?? ''));
+    if ($detail !== '') return [false, $json, 'WhatsApp rejected the request: ' . $detail . (isset($e['code']) ? " (#{$e['code']})" : '')];
+    return [false, $json, $err !== '' ? $err : 'WhatsApp rejected the request'];
+}
+
+/**
+ * Meta WhatsApp Cloud API message. $to is a phone number (digits incl.
+ * country code) or "group:<GROUP_ID>" for a group created with the Groups API.
+ */
+function wf_whatsapp_meta(array $cfg, string $to, string $message, array $tpl): string {
+    $group = str_starts_with($to, 'group:');
+    $base = ['messaging_product' => 'whatsapp', 'recipient_type' => $group ? 'group' : 'individual', 'to' => $group ? substr($to, 6) : $to];
+
+    $name = trim((string) ($tpl['name'] ?? ''));
+    if ($name !== '') {
+        // Template values may not contain line breaks, tabs or 4+ spaces, nor be empty.
+        $clean = fn (string $s) => ($s = trim((string) preg_replace('/\s+/u', ' ', $s))) === '' ? '-' : $s;
+        $template = ['name' => $name, 'language' => ['code' => trim((string) ($tpl['language'] ?? '')) ?: 'en']];
+        $params = array_map($clean, $tpl['params'] ?? []);
+        if ($params) $template['components'] = [['type' => 'body', 'parameters' => array_map(fn ($p) => ['type' => 'text', 'text' => $p], $params)]];
+        $body = $base + ['type' => 'template', 'template' => $template];
+    } else {
+        if ($message === '') return 'WhatsApp message is empty';
+        $body = $base + ['type' => 'text', 'text' => ['preview_url' => false, 'body' => $message]];
+    }
+
+    [, , $err] = wf_meta_api('POST', trim((string) ($cfg['phone_number_id'] ?? '')) . '/messages', $body);
+    return $err;
+}
+
+/** Recipient entry from a WhatsApp node's "To" field → number with country code, "group:<id>", or '' if unusable. */
+function wf_wa_recipient(string $s): string {
+    $s = trim($s);
+    if (preg_match('/^group\s*:\s*([A-Za-z0-9_=-]{8,})$/i', $s, $m)) return 'group:' . $m[1];
+    return wf_wa_number($s);
+}
+
+/** Minimal HTTP client — curl when available, PHP streams otherwise. Returns [status, error, body]. */
+function wf_http(string $method, string $url, $body = null, array $headers = []): array {
+    if (!preg_match('#^https?://#i', $url)) return [0, 'URL must start with http:// or https://', ''];
     $payload = $body === null ? null : json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $headers = array_merge(['Content-Type: application/json'], $headers);
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_CUSTOMREQUEST  => $method,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT        => 10,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
+            CURLOPT_HTTPHEADER     => $headers,
         ]);
         if ($payload !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_exec($ch);
+        // Windows PHP ships without a CA bundle — trust the OS certificate store (no-op elsewhere).
+        if (PHP_OS_FAMILY === 'Windows' && defined('CURLSSLOPT_NATIVE_CA') && !ini_get('curl.cainfo')) curl_setopt($ch, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+        $res = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $err = curl_error($ch);
-        return [$code, $err !== '' ? $err : ($code >= 400 ? "Endpoint answered HTTP {$code}" : '')];
+        return [$code, $err !== '' ? $err : ($code >= 400 ? "Endpoint answered HTTP {$code}" : ''), is_string($res) ? $res : ''];
     }
     $ctx = stream_context_create(['http' => [
         'method' => $method, 'timeout' => 10, 'ignore_errors' => true,
-        'header' => "Content-Type: application/json\r\n", 'content' => $payload ?? '',
+        'header' => implode("\r\n", $headers) . "\r\n", 'content' => $payload ?? '',
     ]]);
     $res = @file_get_contents($url, false, $ctx);
     $code = 0;
     foreach ($http_response_header ?? [] as $h) {
         if (preg_match('#^HTTP/\S+\s+(\d{3})#', $h, $m)) $code = (int) $m[1];
     }
-    if ($res === false && $code === 0) return [0, 'Could not reach the endpoint'];
-    return [$code, $code >= 400 ? "Endpoint answered HTTP {$code}" : ''];
+    if ($res === false && $code === 0) return [0, 'Could not reach the endpoint', ''];
+    return [$code, $code >= 400 ? "Endpoint answered HTTP {$code}" : '', $res === false ? '' : $res];
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────
@@ -434,11 +604,39 @@ function wf_action(string $type, array $cfg, array &$ctx, array $wf, bool $dry):
                     $subject = $strip(wf_resolve($cfg['subject'] ?? '', $ctx));
                     $body = wf_resolve($cfg['body'] ?? '', $ctx);
                     if (!$dry) {
-                        $headers = "From: {$from}\r\nContent-Type: text/plain; charset=UTF-8";
-                        $sent = @mail(implode(', ', $list), '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
-                        if (!$sent) return ['status' => 'error', 'error' => 'The mail server did not accept the email'];
+                        $err = wf_mail_send($from, $list, $subject, $body);
+                        if ($err !== '') return ['status' => 'error', 'error' => $err];
                     }
                     return ['status' => 'ok', 'detail' => 'email → ' . implode(', ', $list)];
+                }
+                if (($cfg['channel'] ?? '') === 'WhatsApp') {
+                    // The designer allows saving an alert before its department number is known.
+                    if (trim(wf_scalar($cfg['phones'] ?? '')) === '') return ['status' => 'noop', 'error' => 'No WhatsApp number set for this alert — skipped'];
+                    $nums = [];
+                    foreach (preg_split('/[,;\n]/', wf_resolve($cfg['phones'] ?? '', $ctx)) as $p) {
+                        if (trim($p) === '') continue;
+                        $n = wf_wa_recipient($p);
+                        if ($n === '') return ['status' => 'error', 'error' => 'Invalid WhatsApp number or group “' . trim($p) . '”'];
+                        $nums[] = $n;
+                    }
+                    if (!$nums) return ['status' => 'error', 'error' => 'Notification has no recipient'];
+                    $message = trim(wf_resolve($cfg['message'] ?? '', $ctx));
+                    // Approved template (Meta): one value per line fills {{1}}, {{2}}, …
+                    $tpl = [
+                        'name'     => trim(wf_resolve($cfg['waTemplate'] ?? '', $ctx)),
+                        'language' => trim(wf_scalar($cfg['waLanguage'] ?? '')),
+                        'params'   => array_map(fn ($l) => wf_resolve($l, $ctx), array_values(array_filter(
+                            preg_split('/\r?\n/', wf_scalar($cfg['waParams'] ?? '')), fn ($l) => trim($l) !== ''))),
+                    ];
+                    if ($message === '' && $tpl['name'] === '') return ['status' => 'error', 'error' => 'WhatsApp message is empty'];
+                    if (!$dry) {
+                        foreach (array_unique($nums) as $n) {
+                            $err = wf_whatsapp_send($n, $message, $tpl);
+                            if ($err !== '') return ['status' => 'error', 'error' => $err];
+                        }
+                    }
+                    $via = $tpl['name'] !== '' ? " (template {$tpl['name']})" : '';
+                    return ['status' => 'ok', 'detail' => 'whatsapp → ' . implode(', ', array_unique($nums)) . $via];
                 }
                 $url = trim(wf_resolve($cfg['url'] ?? '', $ctx));
                 if ($url === '') return ['status' => 'error', 'error' => 'Webhook URL is empty'];
@@ -500,14 +698,16 @@ function wf_execute(array $wf, string $triggerKey, array &$ctx, bool $dry): arra
         $type = (string) ($node['data']['actionType'] ?? '');
         $cfg = is_array($node['data']['config'] ?? null) ? $node['data']['config'] : [];
         $next = $out[$id] ?? [];
+        // Optional "Step name" set in the designer.
+        $label = trim(wf_scalar($cfg['label'] ?? ''));
 
         if ($type === 'condition') {
             $want = wf_eval_condition($cfg, $ctx) ? 'true' : 'false';
             $next = array_filter($next, fn ($e) => (($e['sourceHandle'] ?? null) ?: 'true') === $want);
-            $steps[] = ['nodeId' => $id, 'action' => 'Condition → ' . ($want === 'true' ? 'True' : 'False'), 'status' => 'ok', 'error' => ''];
+            $steps[] = ['nodeId' => $id, 'action' => ($label !== '' ? $label : 'Condition') . ' → ' . ($want === 'true' ? 'True' : 'False'), 'status' => 'ok', 'error' => ''];
         } elseif ($id !== $start) {
             $r = wf_action($type, $cfg, $ctx, $wf, $dry);
-            $steps[] = ['nodeId' => $id, 'action' => WF_LABELS[$type] ?? $type, 'status' => $r['status'], 'error' => $r['error'] ?? '', 'detail' => $r['detail'] ?? null];
+            $steps[] = ['nodeId' => $id, 'action' => $label !== '' ? $label : (WF_LABELS[$type] ?? $type), 'status' => $r['status'], 'error' => $r['error'] ?? '', 'detail' => $r['detail'] ?? null];
         }
 
         foreach ($next as $e) {

@@ -3,12 +3,15 @@ import { getDef } from './schema';
 import { useUsers } from '../../context/UsersContext';
 import { usePicklists } from '../../context/PicklistsContext';
 
-function NodeCard({ def, children }) {
+// A node's optional "Step name" (config.label) replaces the generic type name
+// as its title, so a graph with many similar steps stays readable.
+function NodeCard({ def, config, children }) {
+  const name = (config?.label || '').trim();
   return (
     <div className={`wf-node wf-node-${def.kind}`}>
       <div className="wf-node-head">
-        <span className="wf-node-icon" style={{ background: def.color }}>{def.icon}</span>
-        <div className="wf-node-title">{def.label}</div>
+        <span className="wf-node-icon" style={{ background: def.color }} title={def.label}>{def.icon}</span>
+        <div className="wf-node-title">{name || def.label}</div>
         {def.kind === 'trigger' && <span className="wf-node-badge">Start</span>}
       </div>
       {children}
@@ -28,7 +31,7 @@ function NodeSummary({ def, config }) {
 export function TriggerNode({ data }) {
   const def = getDef(data.actionType);
   return (
-    <NodeCard def={def}>
+    <NodeCard def={def} config={data.config}>
       <p className="wf-node-desc">{def.description}</p>
       <Handle type="source" position={Position.Right} className="wf-handle" />
     </NodeCard>
@@ -38,7 +41,7 @@ export function TriggerNode({ data }) {
 export function ActionNode({ data }) {
   const def = getDef(data.actionType);
   return (
-    <NodeCard def={def}>
+    <NodeCard def={def} config={data.config}>
       <NodeSummary def={def} config={data.config} />
       <Handle type="target" position={Position.Left} className="wf-handle" />
       <Handle type="source" position={Position.Right} className="wf-handle" />
@@ -49,7 +52,7 @@ export function ActionNode({ data }) {
 export function ConditionNode({ data }) {
   const def = getDef(data.actionType);
   return (
-    <NodeCard def={def}>
+    <NodeCard def={def} config={data.config}>
       <NodeSummary def={def} config={data.config} />
       <Handle type="target" position={Position.Left} className="wf-handle" />
       <div className="wf-branches">

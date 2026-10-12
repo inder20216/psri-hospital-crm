@@ -115,6 +115,143 @@ const NEW_CASE_TEMPLATE_CONFIG = {
   ],
 };
 
+// ── "Case WhatsApp Alerts" template ───────────────────────────────────────────
+// Sends department WhatsApp alerts for a new case. The three branches run
+// independently, so one case can raise alerts on several of them. Inside a
+// branch the checks are a chain: the first matching check sends the alert,
+// otherwise its False exit tries the next check (the last one is a fallback).
+//
+//   trigger ─┬─ Call back arranged? → by Type of Enquiry:
+//            │     Report / records → Report Desk · Billing → Billing Desk ·
+//            │     Appointment → Appointment Desk · else → Front Desk
+//            ├─ High value case? → Transplant? → Transplant Coordination
+//            │     else by Specialty Enquired For: Cardiac · Orthopaedics ·
+//            │     Oncology · Neuro · else → High Value General Desk
+//            └─ Complaint / feedback? → Patient Relations (always), then by
+//                  Type of Complaint: Doctor → Medical Superintendent ·
+//                  High Charges → Billing · Emergency Services → Emergency ·
+//                  Staff / Services / Waiting → Hospital Operations
+//
+// Matching values come from the CRM picklists (Type of Enquiry, Specialty,
+// Type of Complaint). Every alert starts on one shared WhatsApp number;
+// replace it per node with the department's own number as they are known.
+
+export const CASE_WHATSAPP_TEMPLATE_KEY = 'case-whatsapp';
+
+const WA_DEFAULT_TO = '9667224319';
+
+// One entry per alert type: the plain-text message, and the approved Meta
+// template that carries the same words (its {{1}}, {{2}}, … filled from
+// waParams, one value per line). The templates must be created in WhatsApp
+// Manager with these names — PSRI/Workflows/CASE_WHATSAPP_ALERTS.md has their text.
+const NAME_NUMBER_CONCERN = '{{contact.name}}\n{{contact.mobile}}\n{{case.summary}}';
+const ALERT_CALLBACK = {
+  message: 'CALL BACK\nName- {{contact.name}}\nNumber- {{contact.mobile}}\nConcern- {{case.summary}}\nPlease arrange a call back from concerned department.',
+  waTemplate: 'psri_call_back', waParams: NAME_NUMBER_CONCERN,
+};
+const ALERT_HIGH_VALUE = {
+  message: 'HIGH VALUE CASE\nName - {{contact.name}}\nNumber - {{contact.mobile}}\nConcern- {{case.summary}}\nPlease arrange a call back from concerned department',
+  waTemplate: 'psri_high_value_case', waParams: NAME_NUMBER_CONCERN,
+};
+const ALERT_TRANSPLANT = {
+  message: 'Transplant Program\nName- {{contact.name}}\nNumber- {{contact.mobile}}\nLocation - {{contact.city}}, {{contact.state}}\nConcern- {{case.summary}}\nPlease arrange a call back from concerned department.',
+  waTemplate: 'psri_transplant_program', waParams: '{{contact.name}}\n{{contact.mobile}}\n{{contact.city}}, {{contact.state}}\n{{case.summary}}',
+};
+const ALERT_COMPLAINT = {
+  message: 'Complaint/Feedback\nName- {{contact.name}}\nNumber- {{contact.mobile}}\nConcern- {{case.summary}}\nPlease look into this matter.',
+  waTemplate: 'psri_complaint_feedback', waParams: NAME_NUMBER_CONCERN,
+};
+
+// Columns are wider than the 210 px node card; rows clear a condition card.
+const WX = [60, 360, 660, 960, 1260];
+const WR = 150;
+const wy = row => 60 + row * WR;
+
+const check = (id, col, row, label, field, operator, value) =>
+  tplNode(id, 'condition', 'condition', WX[col], wy(row), { label, field, operator, value });
+const whatsapp = (id, col, row, label, alert) =>
+  tplNode(id, 'action', 'notify', WX[col], wy(row), { label, channel: 'WhatsApp', phones: WA_DEFAULT_TO, waLanguage: 'en', ...alert, url: '', from: '', to: '', subject: '', body: '' });
+const link = (source, target, sourceHandle = null) =>
+  ({ id: `tpl-w-${source}-${target}`, source, target, sourceHandle, targetHandle: null });
+
+const CASE_WHATSAPP_TEMPLATE_CONFIG = {
+  v: 1,
+  nodes: [
+    tplNode('wa-trigger', 'trigger', 'caseCreated', WX[0], wy(6.5), {}),
+
+    // Call Back — rows 0–3
+    check('cb-check',      1, 0, 'Call back arranged?',     'case.isCallback',    'eq', 'true'),
+    check('cb-report',     2, 0, 'Report / records query?', 'case.typeOfEnquiry', 'in', 'Lab/ Lab Reports, Scan/ X Ray/ Ultrasound, Medical Records'),
+    check('cb-billing',    2, 1, 'Billing query?',          'case.typeOfEnquiry', 'in', 'IP Billing, OP Billing, Accounts, Consultation Charges, Other Charges, Insurance/ Health Card'),
+    check('cb-appt',       2, 2, 'Appointment query?',      'case.typeOfEnquiry', 'in', 'Doctor Availability, Slot Availability, Appointment Reconfirmation'),
+    whatsapp('cb-wa-report',  3, 0, 'Call back → Report Desk',      ALERT_CALLBACK),
+    whatsapp('cb-wa-billing', 3, 1, 'Call back → Billing Desk',     ALERT_CALLBACK),
+    whatsapp('cb-wa-appt',    3, 2, 'Call back → Appointment Desk', ALERT_CALLBACK),
+    whatsapp('cb-wa-front',   3, 3, 'Call back → Front Desk',       ALERT_CALLBACK),
+
+    // High Value — rows 4.5–9.5
+    check('hv-check',      1, 4.5, 'High value case?',    'case.isHighValue',          'eq', 'true'),
+    check('hv-transplant', 2, 4.5, 'Transplant enquiry?', 'case.procedureOrSpecialty', 'contains', 'Transplant'),
+    check('hv-cardiac',    3, 5.5, 'Cardiac specialty?',  'case.specialtyEnquiredFor', 'in', 'Cardiac Sciences, CTVS, Vascular & Endovascular Surgery'),
+    check('hv-ortho',      3, 6.5, 'Orthopaedics?',       'case.specialtyEnquiredFor', 'in', 'Orthopedics'),
+    check('hv-onco',       3, 7.5, 'Oncology?',           'case.specialtyEnquiredFor', 'in', 'Oncology & Onco Surgery'),
+    check('hv-neuro',      3, 8.5, 'Neuro sciences?',     'case.specialtyEnquiredFor', 'in', 'Neuro Sciences'),
+    whatsapp('hv-wa-transplant', 3, 4.5, 'Transplant → Transplant Coordination', ALERT_TRANSPLANT),
+    whatsapp('hv-wa-cardiac',    4, 5.5, 'High value → Cardiac Desk',            ALERT_HIGH_VALUE),
+    whatsapp('hv-wa-ortho',      4, 6.5, 'High value → Orthopaedics Desk',       ALERT_HIGH_VALUE),
+    whatsapp('hv-wa-onco',       4, 7.5, 'High value → Oncology Desk',           ALERT_HIGH_VALUE),
+    whatsapp('hv-wa-neuro',      4, 8.5, 'High value → Neuro Desk',              ALERT_HIGH_VALUE),
+    whatsapp('hv-wa-general',    4, 9.5, 'High value → General Desk',            ALERT_HIGH_VALUE),
+
+    // Complaint / Feedback — rows 11–14
+    check('cf-check',     1, 11, 'Complaint / feedback?',       'case.callFor',         'contains', 'Complaint'),
+    check('cf-doctor',    3, 11, 'About a doctor?',             'case.typeOfComplaint', 'eq', 'Doctor'),
+    check('cf-charges',   3, 12, 'About charges?',              'case.typeOfComplaint', 'eq', 'High Charges'),
+    check('cf-emergency', 3, 13, 'About emergency services?',   'case.typeOfComplaint', 'eq', 'Emergency Services'),
+    check('cf-ops',       3, 14, 'Staff / services / waiting?', 'case.typeOfComplaint', 'in', 'Hospital Staff, Hospital Services, Long Waiting Time'),
+    whatsapp('cf-wa-pr',        2, 11, 'Complaint → Patient Relations',      ALERT_COMPLAINT),
+    whatsapp('cf-wa-doctor',    4, 11, 'Complaint → Medical Superintendent', ALERT_COMPLAINT),
+    whatsapp('cf-wa-charges',   4, 12, 'Complaint → Billing Desk',           ALERT_COMPLAINT),
+    whatsapp('cf-wa-emergency', 4, 13, 'Complaint → Emergency Department',   ALERT_COMPLAINT),
+    whatsapp('cf-wa-ops',       4, 14, 'Complaint → Hospital Operations',    ALERT_COMPLAINT),
+  ],
+  edges: [
+    link('wa-trigger', 'cb-check'),
+    link('wa-trigger', 'hv-check'),
+    link('wa-trigger', 'cf-check'),
+
+    link('cb-check',   'cb-report',     'true'),
+    link('cb-report',  'cb-wa-report',  'true'),
+    link('cb-report',  'cb-billing',    'false'),
+    link('cb-billing', 'cb-wa-billing', 'true'),
+    link('cb-billing', 'cb-appt',       'false'),
+    link('cb-appt',    'cb-wa-appt',    'true'),
+    link('cb-appt',    'cb-wa-front',   'false'),
+
+    link('hv-check',      'hv-transplant',    'true'),
+    link('hv-transplant', 'hv-wa-transplant', 'true'),
+    link('hv-transplant', 'hv-cardiac',       'false'),
+    link('hv-cardiac',    'hv-wa-cardiac',    'true'),
+    link('hv-cardiac',    'hv-ortho',         'false'),
+    link('hv-ortho',      'hv-wa-ortho',      'true'),
+    link('hv-ortho',      'hv-onco',          'false'),
+    link('hv-onco',       'hv-wa-onco',       'true'),
+    link('hv-onco',       'hv-neuro',         'false'),
+    link('hv-neuro',      'hv-wa-neuro',      'true'),
+    link('hv-neuro',      'hv-wa-general',    'false'),
+
+    link('cf-check',     'cf-wa-pr',        'true'),
+    link('cf-wa-pr',     'cf-doctor'),
+    link('cf-doctor',    'cf-wa-doctor',    'true'),
+    link('cf-doctor',    'cf-charges',      'false'),
+    link('cf-charges',   'cf-wa-charges',   'true'),
+    link('cf-charges',   'cf-emergency',    'false'),
+    link('cf-emergency', 'cf-wa-emergency', 'true'),
+    link('cf-emergency', 'cf-ops',          'false'),
+    link('cf-ops',       'cf-wa-ops',       'true'),
+  ],
+};
+
 // ── Builders ─────────────────────────────────────────────────────────────────
 
 export function buildNewContactTemplate(assigneeId) {
@@ -122,6 +259,10 @@ export function buildNewContactTemplate(assigneeId) {
   const a = cfg.nodes.find(n => n.data.actionType === 'assign');
   if (assigneeId && a) a.data.config.assignedTo = String(assigneeId);
   return fromConfig(cfg);
+}
+
+export function buildCaseWhatsAppTemplate() {
+  return fromConfig(JSON.parse(JSON.stringify(CASE_WHATSAPP_TEMPLATE_CONFIG)));
 }
 
 export function buildNewCaseTemplate(assigneeId) {

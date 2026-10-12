@@ -57,8 +57,37 @@ if (PHP_SAPI === 'cli') {
         $trigger = api_trigger_of($graph);
         [$contact, $case] = api_context($trigger, $payload['contact'] ?? [], $payload['case'] ?? []);
         echo json_encode(wf_fire($trigger, $contact, $case, ['graph' => $graph, 'dryRun' => true]), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+    } elseif ($cmd === 'wa-test' && ($argv[2] ?? '') !== '') {
+        // Sends one real WhatsApp template (default: Meta's pre-approved hello_world) to check the credentials.
+        $to = wf_wa_recipient($argv[2]);
+        if ($to === '') { fwrite(STDERR, "invalid number or group\n"); exit(2); }
+        $tpl = ['name' => $argv[3] ?? 'hello_world', 'language' => $argv[4] ?? 'en_US', 'params' => array_slice($argv, 5)];
+        $err = wf_whatsapp_send($to, '', $tpl);
+        echo $err === '' ? "sent {$tpl['name']} to {$to}\n" : "failed: {$err}\n";
+        exit($err === '' ? 0 : 1);
+    } elseif ($cmd === 'wa-group-create' && trim($argv[2] ?? '') !== '') {
+        // Groups API: the new group's id arrives by webhook, so look it up in the group list afterwards.
+        $phoneId = trim((string) (psri_config()['whatsapp']['phone_number_id'] ?? ''));
+        $body = ['messaging_product' => 'whatsapp', 'subject' => trim($argv[2])];
+        if (trim($argv[3] ?? '') !== '') $body['description'] = trim($argv[3]);
+        [$ok, , $err] = wf_meta_api('POST', "{$phoneId}/groups", $body);
+        echo $ok ? "group “{$body['subject']}” requested — run: php api.php wa-groups\n" : "failed: {$err}\n";
+        exit($ok ? 0 : 1);
+    } elseif ($cmd === 'wa-groups') {
+        // Lists the business number's groups with the "To" value for a WhatsApp node and the invite link to share.
+        $phoneId = trim((string) (psri_config()['whatsapp']['phone_number_id'] ?? ''));
+        [$ok, $res, $err] = wf_meta_api('GET', "{$phoneId}/groups");
+        if (!$ok) { echo "failed: {$err}\n"; exit(1); }
+        $groups = $res['data']['groups'] ?? [];
+        if (!$groups) echo "no groups yet — create one: php api.php wa-group-create \"Billing Desk\"\n";
+        foreach ($groups as $g) {
+            [, $link] = wf_meta_api('GET', rawurlencode((string) $g['id']) . '/invite_link');
+            echo ($g['subject'] ?? '(no subject)'), "\n  To:     group:{$g['id']}\n  Invite: ", ($link['invite_link'] ?? '(could not fetch)'), "\n";
+        }
+        exit(0);
     } else {
-        fwrite(STDERR, "usage: php api.php migrate | php api.php test <graph.json> [payload.json]\n");
+        fwrite(STDERR, "usage: php api.php migrate | test <graph.json> [payload.json] | wa-test <number|group:ID> [template] [language] [values…]\n"
+            . "       | wa-group-create \"<subject>\" [\"<description>\"] | wa-groups\n");
         exit(2);
     }
     exit(0);

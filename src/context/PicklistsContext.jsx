@@ -7,6 +7,9 @@ export const KNOWN_LISTS = [
   'Channel', 'Type of Call', 'Call For', 'Type of Enquiry', 'Priority', 'Case Status',
   'Appointment Status', 'Specialty', 'Type of Procedure', 'Mode of Payment', 'Doctor',
   'Type of Complaint', 'Type of Emergency',
+  // Group invite links for the case-form WhatsApp widget — value format is
+  // "Report Desk = https://chat.whatsapp.com/…". See src/projects/psri/whatsappGroups.js.
+  'WhatsApp Groups',
 ];
 
 // Default values for critical picklists to ensure agents always have options

@@ -9,7 +9,7 @@ import { psri } from '../api/psri';
 import { useAuth } from '../context/AuthContext';
 import { fromConfig, getDef, isConditionLike, newNode, severityBlocks, toConfig, validateGraph } from './workflow/schema';
 import { nodeTypes } from './workflow/nodes';
-import { NEW_CASE_TEMPLATE_KEY, NEW_CONTACT_TEMPLATE_KEY, buildNewCaseTemplate, buildNewContactTemplate } from './workflow/templates';
+import { CASE_WHATSAPP_TEMPLATE_KEY, NEW_CASE_TEMPLATE_KEY, NEW_CONTACT_TEMPLATE_KEY, buildCaseWhatsAppTemplate, buildNewCaseTemplate, buildNewContactTemplate } from './workflow/templates';
 import { triggerKeyFor } from './workflow/schema';
 import Palette from './workflow/Palette';
 import PropertyPanel from './workflow/PropertyPanel';
@@ -165,7 +165,7 @@ export default function WorkflowEditorPage() {
   const runValidate = useCallback(() => {
     const iss = validateGraph(nodes, edges);
     setIssues(iss);
-    const errIds = new Set(iss.filter(i => i.nodeId).map(i => i.nodeId));
+    const errIds = new Set(iss.filter(i => i.nodeId && i.severity === 'error').map(i => i.nodeId));
     setNodes(nds => nds.map(n => errIds.has(n.id) ? { ...n, className: 'wf-invalid' } : { ...n, className: undefined }));
     if (iss.length === 0) showToast('All checks passed.');
     return iss;
@@ -209,6 +209,11 @@ export default function WorkflowEditorPage() {
       setNodes(nds);
       setEdges(eds);
       setName('New Case Onboarding');
+    } else if (templateKey === CASE_WHATSAPP_TEMPLATE_KEY) {
+      const { nodes: nds, edges: eds } = buildCaseWhatsAppTemplate();
+      setNodes(nds);
+      setEdges(eds);
+      setName('Case WhatsApp Alerts');
     } else {
         const seed = newNode('contactCreated', { x: 80, y: 140 });
         setNodes([seed]);
