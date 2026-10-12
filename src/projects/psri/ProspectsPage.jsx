@@ -129,6 +129,7 @@ export default function ProspectsPage() {
   const [selectedIds, setSelectedIds]     = useState(new Set()); // bulk-assign checkboxes — Admin/Super Admin only
   const [bulkAssignTo, setBulkAssignTo]   = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [remarksOpenId, setRemarksOpenId] = useState(''); // which card's remarks popover is open, if any
   const [edit, setEdit]           = useState(emptyEdit);
   const [saving, setSaving]       = useState(false);
   const [saveErr, setSaveErr]     = useState('');
@@ -183,6 +184,7 @@ export default function ProspectsPage() {
     setCasesByTxn({});
     setLinkedCases([]);
     setPlayingKey('');
+    setRemarksOpenId('');
     if (audioRef.current) audioRef.current.pause();
     loadHistory(p);
   };
@@ -345,8 +347,11 @@ export default function ProspectsPage() {
           {!loading && !loadErr && prospects.length === 0 && (
             <div className="psri-empty">No open prospects right now — every enquiry has been converted or closed out.</div>
           )}
-          {!loading && prospects.map(p => (
-            <div key={p.id} className={`psri-contact-card ${selected?.id === p.id ? 'active' : ''}`} onClick={() => select(p)}>
+          {!loading && prospects.map(p => {
+            const noteText = p.remarks || p.originalSummary;
+            const noteIsRemark = !!p.remarks;
+            return (
+            <div key={p.id} className={`psri-contact-card ${selected?.id === p.id ? 'active' : ''}`} onClick={() => select(p)} style={{ position: 'relative' }}>
               {isAdmin && (
                 <input
                   type="checkbox"
@@ -363,6 +368,23 @@ export default function ProspectsPage() {
                   <span>{p.contactMobile}</span>
                   <span className="psri-badge">{p.leadStatus || 'New'}</span>
                   {p.attempts > 0 && <span className="psri-badge">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''}</span>}
+                  {/* Icon toggle instead of inline text — keeps every card the
+                      same height regardless of remark length; the right-side
+                      form is what actually needs the vertical room. */}
+                  {noteText && (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setRemarksOpenId(id => id === p.id ? '' : p.id); }}
+                      title={noteIsRemark ? 'Remarks' : 'Original enquiry'}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                        fontSize: 13, lineHeight: 1, display: 'flex', alignItems: 'center', gap: 2,
+                        color: 'var(--psri-text-muted, #64748b)',
+                      }}
+                    >
+                      {noteIsRemark ? '📝' : '📞'} {remarksOpenId === p.id ? '▴' : '▾'}
+                    </button>
+                  )}
                 </div>
                 {p.enquiryTypes && <div className="cp-hint" style={{ margin: '2px 0 0' }}>{p.enquiryTypes}</div>}
                 {isAdmin && (
@@ -371,8 +393,24 @@ export default function ProspectsPage() {
                   </div>
                 )}
               </div>
+              {remarksOpenId === p.id && noteText && (
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    position: 'absolute', top: '100%', left: 12, right: 12, zIndex: 20, marginTop: 4,
+                    background: '#fff', border: '1px solid var(--psri-border)', borderRadius: 10,
+                    boxShadow: '0 8px 24px rgba(0,0,0,.12)', padding: '10px 12px', fontSize: 12.5, lineHeight: 1.5,
+                    maxHeight: 160, overflowY: 'auto',
+                  }}
+                >
+                  <div className="cp-hint" style={{ margin: '0 0 4px', fontWeight: 700 }}>
+                    {noteIsRemark ? 'Remarks' : 'Original enquiry (no remarks yet)'}
+                  </div>
+                  {noteText}
+                </div>
+              )}
             </div>
-          ))}
+          );})}
         </div>
 
         <div className="psri-detail">
