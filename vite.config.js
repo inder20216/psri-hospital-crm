@@ -1,5 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import dns from 'node:dns'
+
+// Resolve "localhost" to 127.0.0.1 so the dev server is reachable from
+// browsers that don't try IPv6 (::1) for localhost.
+dns.setDefaultResultOrder('ipv4first')
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({

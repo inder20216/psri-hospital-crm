@@ -9,6 +9,7 @@ import { useSparkTG } from '../../context/SparkTGContext';
 import { psri } from '../../api/psri';
 import ContactPicker from './ContactPicker';
 import { DoctorSpecialtyPanel } from './DoctorLookupWidget';
+import WhatsAppGroupWidget from './WhatsAppGroupWidget';
 import './Psri.css';
 
 // Query Type defaults to Basic for every call, but these Call For types
@@ -1196,6 +1197,8 @@ export default function CasesPage() {
               </div>
             </div>
           )}
+
+          <WhatsAppGroupWidget form={form} />
 
           </div>{/* /psri-form-gated */}
 

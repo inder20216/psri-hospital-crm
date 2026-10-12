@@ -48,6 +48,15 @@ export const CASE_FIELDS = [
   { key: 'case.specialty',     label: 'Case · Specialty' },
   { key: 'case.doctorName',    label: 'Case · Doctor' },
   { key: 'case.summary',       label: 'Case · Summary' },
+  { key: 'case.typeOfComplaint',      label: 'Case · Type of Complaint' },
+  // Checkbox fields hold "true" / "false".
+  { key: 'case.isCallback',           label: 'Case · Call Back Arranged (true / false)' },
+  { key: 'case.isHighValue',          label: 'Case · High Value Case (true / false)' },
+  { key: 'case.typeOfProcedure',      label: 'Case · Type of Procedure' },
+  { key: 'case.nameOfProcedure',      label: 'Case · Name of Procedure' },
+  { key: 'case.specialtyEnquiredFor', label: 'Case · Specialty Enquired For' },
+  // Runner-computed: Type of Procedure + Name of Procedure + Specialty Enquired For + Type of Enquiry.
+  { key: 'case.procedureOrSpecialty', label: 'Case · Procedure / Specialty / Enquiry (any)' },
 ];
 
 export const CONDITION_FIELDS = [...CONTACT_FIELDS, ...CASE_FIELDS];
@@ -115,23 +124,33 @@ export const NODE_DEFS = {
 
   notify: def(
     'notify', 'action', 'Send Notification', '🔔', '#4338ca',
-    'Posts a message to a webhook or email address',
+    'Posts a message to a webhook, email address or WhatsApp number',
     [
       {
         key: 'channel', label: 'Channel', type: 'select', required: true,
-        options: [{ value: 'Webhook', label: 'Webhook URL' }, { value: 'Email', label: 'Email' }],
+        options: [{ value: 'Webhook', label: 'Webhook URL' }, { value: 'Email', label: 'Email' }, { value: 'WhatsApp', label: 'WhatsApp' }],
       },
-      { key: 'url',      label: 'Webhook URL',    type: 'text',     required: true, showIf: c => c.channel !== 'Email',     placeholder: 'https://hooks.example.com/…' },
-      { key: 'message',  label: 'Message',        type: 'textarea', required: true, showIf: c => c.channel !== 'Email',     placeholder: 'New contact: {{contact.name}}, {{contact.mobile}}' },
+      { key: 'url',      label: 'Webhook URL',    type: 'text',     required: true, showIf: c => c.channel !== 'Email' && c.channel !== 'WhatsApp', placeholder: 'https://hooks.example.com/…' },
+      // A blank number is only a warning: the alert is skipped until one is
+      // added, so a large routing workflow can go live a department at a time.
+      { key: 'phones',   label: 'To (WhatsApp numbers or groups)', type: 'text', required: true, hint: 'Comma separated. A WhatsApp group is written group:<GROUP_ID> — the IDs are listed by the group setup command.', warnIfEmpty: 'no WhatsApp number yet — this alert is skipped until one is added.', showIf: c => c.channel === 'WhatsApp', placeholder: '9811000000, group:<GROUP_ID>' },
+      // WhatsApp: an approved template is required to message someone outside
+      // the 24-hour window after they last wrote to the business number.
+      { key: 'waTemplate', label: 'WhatsApp template name', type: 'text', showIf: c => c.channel === 'WhatsApp', placeholder: 'e.g. psri_call_back — blank sends the message as plain text', hint: 'The approved template name in WhatsApp Manager. Plain text only reaches people who messaged your WhatsApp number in the last 24 hours.' },
+      { key: 'waLanguage', label: 'Template language', type: 'text', showIf: c => c.channel === 'WhatsApp' && !!(c.waTemplate || '').trim(), placeholder: 'en', hint: 'Language code the template was approved in, e.g. en or en_US.' },
+      { key: 'waParams',   label: 'Template values — one per line for {{1}}, {{2}}, …', type: 'textarea', showIf: c => c.channel === 'WhatsApp' && !!(c.waTemplate || '').trim(), placeholder: '{{contact.name}}\n{{contact.mobile}}\n{{case.summary}}' },
+      { key: 'message',  label: 'Message',        type: 'textarea', required: true, showIf: c => c.channel !== 'Email' && !(c.channel === 'WhatsApp' && (c.waTemplate || '').trim()), placeholder: 'New contact: {{contact.name}}, {{contact.mobile}}' },
       { key: 'from',     label: 'From (email)',   type: 'text',                     showIf: c => c.channel === 'Email',     placeholder: 'Optional — blank uses the CRM sender' },
       { key: 'to',       label: 'To',             type: 'text',     required: true, showIf: c => c.channel === 'Email',     placeholder: 'team@example.com or {{contact.email}}' },
       { key: 'subject',  label: 'Subject',        type: 'text',     required: true, showIf: c => c.channel === 'Email',     placeholder: 'New patient contact' },
       { key: 'body',     label: 'Body',           type: 'textarea', required: true, showIf: c => c.channel === 'Email',     placeholder: '{{contact.name}} just registered.\n{{contact.notes}}' },
     ],
-    { channel: 'Webhook', url: '', message: '', from: '', to: '', subject: '', body: '' },
+    { channel: 'Webhook', url: '', phones: '', waTemplate: '', waLanguage: 'en', waParams: '', message: '', from: '', to: '', subject: '', body: '' },
     (cfg) => cfg.channel === 'Email'
       ? `Email → ${cfg.to || '…'}`
-      : `Webhook → ${cfg.url || '…'}`,
+      : cfg.channel === 'WhatsApp'
+        ? `WhatsApp → ${cfg.phones || '…'}${(cfg.waTemplate || '').trim() ? ` · ${cfg.waTemplate.trim()}` : ''}`
+        : `Webhook → ${cfg.url || '…'}`,
   ),
 
   createCase: def(
@@ -246,6 +265,11 @@ export function isConditionLike(node) {
   return d?.kind === 'condition';
 }
 
+// Node name for messages: its "Step name" if set, else the node type's label.
+export function stepName(node) {
+  return (node?.data?.config?.label || '').trim() || getDef(node?.data?.actionType)?.label || 'Node';
+}
+
 export function isTriggerLike(node) {
   const d = getDef(node?.data?.actionType);
   return d?.kind === 'trigger';
@@ -327,7 +351,7 @@ export function validateGraph(nodes, edges) {
   const triggers = nodes.filter(isTriggerLike);
   const nonTriggers = nodes.filter(n => !isTriggerLike(n));
 
-  if (triggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add the “Contact Created” trigger node to start the workflow.' });
+  if (triggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add a trigger node (“Contact Created” or “Case Created”) to start the workflow.' });
   if (triggers.length > 1) issues.push({ severity: 'error', nodeId: null, message: 'Only one trigger node is allowed per workflow.' });
   if (nonTriggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add at least one action node.' });
 
@@ -343,7 +367,7 @@ export function validateGraph(nodes, edges) {
       (adj[id] || []).forEach(t => { if (!seen.has(t)) stack.push(t); });
     }
     nonTriggers.forEach(n => {
-      if (!seen.has(n.id)) issues.push({ severity: 'error', nodeId: n.id, message: `Node “${getDef(n.data.actionType).label}” is not connected from the trigger — it will never run.` });
+      if (!seen.has(n.id)) issues.push({ severity: 'error', nodeId: n.id, message: `Node “${stepName(n)}” is not connected from the trigger — it will never run.` });
     });
   }
 
@@ -363,13 +387,16 @@ export function validateGraph(nodes, edges) {
 
   nodes.forEach(n => {
     const d = getDef(n.data.actionType);
+    const name = stepName(n);
     d.fields.forEach(f => {
       if (!f.required || (f.showIf && !f.showIf(n.data.config || {}))) return;
       const val = (n.data.config || {})[f.key];
       const empty = f.type === 'kv'
         ? !(Array.isArray(val) && val.some(r => (r.key || '').trim() && (r.value || '').trim()))
         : !String(val || '').trim();
-      if (empty) issues.push({ severity: 'error', nodeId: n.id, message: `“${d.label}”: ${f.label} is required.` });
+      if (!empty) return;
+      if (f.warnIfEmpty) issues.push({ severity: 'warn', nodeId: n.id, message: `“${name}”: ${f.warnIfEmpty}` });
+      else issues.push({ severity: 'error', nodeId: n.id, message: `“${name}”: ${f.label} is required.` });
     });
   });
 

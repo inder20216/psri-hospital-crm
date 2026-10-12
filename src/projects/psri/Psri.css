@@ -362,6 +362,110 @@
   margin-top: 4px;
 }
 
+/* ── WHATSAPP GROUP WIDGET (case form · Channel = WhatsApp) ── */
+.psri-wa-widget {
+  margin-top: 14px;
+  background: #f0fdf4;
+  border: 1px solid rgba(37, 211, 102, 0.35);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.psri-wa-widget-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.psri-wa-widget-icon { font-size: 20px; line-height: 1; }
+.psri-wa-widget-title { font-size: 13px; font-weight: 800; color: #075e54; }
+.psri-wa-widget-sub { font-size: 11.5px; color: var(--psri-text-2); margin-top: 2px; }
+.psri-wa-empty { font-size: 12px; color: var(--psri-text-2); margin: 0; }
+.psri-wa-group-list { display: flex; flex-direction: column; gap: 8px; }
+.psri-wa-group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--psri-surface);
+  border: 1px solid var(--psri-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.psri-wa-group-info { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }
+.psri-wa-group-info strong { font-size: 13px; color: var(--psri-text); }
+.psri-wa-group-reason { font-size: 11px; color: var(--psri-text-3); }
+.psri-wa-group-actions { display: flex; align-items: center; gap: 8px; }
+.psri-wa-open-btn { padding: 8px 14px; font-size: 13px; }
+.psri-wa-nolink {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+/* ── FLOATING WHATSAPP GROUP PANEL (opens inside the CRM window) ── */
+.wa-float {
+  position: fixed;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  background: var(--psri-surface);
+  border: 1px solid var(--psri-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.24);
+  z-index: 1300;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: wa-float-pop 0.16s ease;
+}
+@keyframes wa-float-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.wa-float-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #075e54;
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.wa-float-head:active { cursor: grabbing; }
+.wa-float-dot { width: 9px; height: 9px; border-radius: 50%; background: #25d366; flex: 0 0 auto; }
+.wa-float-title { flex: 1; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-float-close {
+  background: none; border: none; color: rgba(255, 255, 255, 0.8);
+  font-size: 15px; cursor: pointer; padding: 0 4px; line-height: 1;
+}
+.wa-float-close:hover { color: #fff; }
+.wa-float-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.wa-float-reason { font-size: 11.5px; color: var(--psri-text-3); }
+.wa-float-msg {
+  width: 100%;
+  height: 148px;
+  resize: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--psri-text);
+  background: #f7fdf9;
+  border: 1px solid var(--psri-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+.wa-float-note { margin: 0; font-size: 10.5px; line-height: 1.45; color: var(--psri-text-3); }
+.wa-float-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--psri-border);
+}
+
 /* ── CONTACT PICKER ── */
 .cp-wrap { position: relative; }
 .cp-hint { font-size: 12px; color: var(--psri-text-3); margin-top: 8px; }

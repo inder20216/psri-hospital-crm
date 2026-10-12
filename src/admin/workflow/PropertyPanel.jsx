@@ -131,7 +131,19 @@ export default function PropertyPanel({ node, onPatch, onRemove }) {
       </div>
 
       <div className="wf-panel-body">
-        {def.fields.length === 0 && (
+        {def.kind !== 'trigger' && (
+          <div className="wf-param">
+            <label>Step name</label>
+            <input
+              type="text"
+              value={config.label || ''}
+              placeholder={def.label}
+              onChange={e => onPatch({ ...config, label: e.target.value })}
+            />
+            <p className="wf-param-hint">Optional — shown on the canvas and in the run history.</p>
+          </div>
+        )}
+        {def.fields.length === 0 && def.kind === 'trigger' && (
           <p className="wf-param-hint" style={{ marginTop: 0 }}>This node has no settings.</p>
         )}
         {def.fields.map(f => {
