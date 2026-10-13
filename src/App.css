@@ -10,14 +10,14 @@
 }
 
 /* ── PHONE VIEW FOR THE WHATSAPP LIST ──────────────────────────────────────
-   The WhatsApp page marks <body> with .psri-wa-focus. On a phone that page is
-   the whole point of scanning the QR code, so drop the desktop chrome: the left
-   rail and every floating widget (dialer, doctor lookup, missed-calls bar,
-   tariff chat) — they are all direct children of .ucrm-shell, so hiding the
-   shell's children except <main> clears them in one rule and leaves the page
-   occupying the full screen. */
-@media (max-width: 820px) {
-  body.psri-wa-focus .ucrm-shell > :not(.ucrm-main) { display: none !important; }
-  /* dvh keeps the last row from hiding behind the phone's address bar. */
-  body.psri-wa-focus .ucrm-shell { height: 100vh; height: 100dvh; }
-}
+   WhatsAppListPage adds .psri-wa-focus to <body>, but only while the page is
+   open AND the device really is a phone or tablet (narrow viewport plus a
+   touch screen). A laptop is never matched, however narrow its window — so it
+   keeps the rail and the QR button, which is the whole point of that button.
+   On a phone this page is what the QR code leads to, so drop the desktop
+   chrome: the rail and every floating widget (dialer, doctor lookup,
+   missed-calls bar, tariff chat) are direct children of .ucrm-shell, so hiding
+   the shell's children except <main> clears them in one rule. */
+body.psri-wa-focus .ucrm-shell > :not(.ucrm-main) { display: none !important; }
+/* dvh keeps the last row from hiding behind a phone's address bar. */
+body.psri-wa-focus .ucrm-shell { height: 100vh; height: 100dvh; }

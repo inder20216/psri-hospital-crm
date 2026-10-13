@@ -173,13 +173,26 @@ export default function WhatsAppListPage() {
 
   useEffect(() => () => clearTimeout(flashTimer.current), []);
 
-  // On a phone this page is meant to stand alone: while it is open, mark the
-  // body so App.css can hide the left rail and the floating widgets (the QR
-  // code on the desktop screen exists precisely so a phone can show just this
-  // list). The class is removed again on the way out.
+  // On a phone this page is meant to stand alone: mark the body so the CSS can
+  // hide the left rail and the floating widgets (the QR code on the desktop
+  // screen exists precisely so a phone can show just this list) and reflow the
+  // page to full width.
+  //
+  // The test is the *device*, not just the width. A laptop with display scaling,
+  // or simply a window that isn't maximised, can easily be narrower than a phone
+  // in landscape — matching that on width alone would drop a laptop into phone
+  // mode and take the rail and the QR button away from the person who needs to
+  // scan the code. Requiring a touch screen (coarse pointer, no hover) keeps the
+  // full-screen presentation on phones and tablets only.
   useEffect(() => {
-    document.body.classList.add('psri-wa-focus');
-    return () => document.body.classList.remove('psri-wa-focus');
+    const phone = window.matchMedia('(max-width: 1024px) and (pointer: coarse) and (hover: none)');
+    const apply = () => document.body.classList.toggle('psri-wa-focus', phone.matches);
+    apply();
+    phone.addEventListener('change', apply);
+    return () => {
+      phone.removeEventListener('change', apply);
+      document.body.classList.remove('psri-wa-focus');
+    };
   }, []);
 
   // Esc closes the QR dialog.
