@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { psri } from '../api/psri';
 import { useAuth } from '../context/AuthContext';
+import { markSeen } from '../projects/psri/suggestionsSeen';
 import './Admin.css';
 
 const STATUS_TABS = [
@@ -17,7 +18,10 @@ function fmtWhen(iso) {
 
 export default function PicklistSuggestionsPage() {
   const { currentUser, isAdmin } = useAuth();
-  const [status, setStatus] = useState('pending');
+  // Admins land on Pending (their actionable queue); everyone else lands on
+  // All — they're just checking outcomes, and their own resolved items
+  // otherwise wouldn't even be in `items` to mark seen below.
+  const [status, setStatus] = useState(isAdmin ? 'pending' : '');
   const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
@@ -42,6 +46,16 @@ export default function PicklistSuggestionsPage() {
   // check whether it was approved, rejected, or approved with a correction
   // — never anyone else's.
   const visibleItems = isAdmin ? items : items.filter(it => it.suggestedBy === currentUser?.id);
+
+  // Opening this page is what "reads" a resolved suggestion — marks every
+  // own, already-decided item seen so the rail's notification count clears.
+  // Depends on `items`/`currentUser` directly (not `visibleItems`, a new
+  // array every render) so this only runs when the data actually changes.
+  useEffect(() => {
+    if (isAdmin) return;
+    const resolved = items.filter(it => it.suggestedBy === currentUser?.id && it.status !== 'pending');
+    if (resolved.length) markSeen(resolved);
+  }, [items, isAdmin, currentUser]);
 
   const review = async (item, approved) => {
     setReviewingId(item.id);

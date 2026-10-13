@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { PROJECTS } from '../projects/registry';
 import { useAuth } from '../context/AuthContext';
+import { psri } from '../api/psri';
+import { countUnseen } from '../projects/psri/suggestionsSeen';
 import './ProjectRail.css';
+
+const SUGGESTIONS_POLL_MS = 60000;
 
 function initials(name) {
   return (name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('');
@@ -12,6 +16,28 @@ export default function ProjectRail() {
   const { pathname } = useLocation();
   const { currentUser, isSuperAdmin, isAdmin, logout } = useAuth();
   const [expanded, setExpanded] = useState(false);
+  const [suggestionCount, setSuggestionCount] = useState(0);
+
+  // Admin: how many need a decision right now. Everyone else: how many of
+  // THEIR OWN suggestions got resolved (approved/rejected) since they last
+  // opened the page — a count of "new", not a queue of "to do".
+  const refreshSuggestionCount = useCallback(() => {
+    if (!currentUser) return;
+    if (isAdmin) {
+      psri.getPicklistSuggestions('pending').then(items => setSuggestionCount(items.length)).catch(() => {});
+    } else {
+      psri.getPicklistSuggestions('').then(items => {
+        const mine = items.filter(it => it.suggestedBy === currentUser.id && it.status !== 'pending');
+        setSuggestionCount(countUnseen(mine));
+      }).catch(() => {});
+    }
+  }, [currentUser, isAdmin]);
+
+  useEffect(() => {
+    refreshSuggestionCount();
+    const interval = setInterval(refreshSuggestionCount, SUGGESTIONS_POLL_MS);
+    return () => clearInterval(interval);
+  }, [refreshSuggestionCount]);
 
   // Users only see PSRI; Super Admins see all projects
   const visibleProjects = isSuperAdmin
@@ -147,7 +173,18 @@ export default function ProjectRail() {
             style={{ '--rail-color': '#7c3aed' }}
             title="Picklist Suggestions"
           >
-            <span className="rail-icon">📋</span>
+            <span className="rail-icon" style={{ position: 'relative' }}>
+              📋
+              {suggestionCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -6, minWidth: 16, height: 16, padding: '0 4px',
+                  borderRadius: 999, background: '#dc2626', color: '#fff', fontSize: 10, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                }}>
+                  {suggestionCount > 99 ? '99+' : suggestionCount}
+                </span>
+              )}
+            </span>
             {expanded && <span className="rail-label">Suggestions</span>}
           </Link>
         )}
