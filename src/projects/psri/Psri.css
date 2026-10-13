@@ -48,6 +48,13 @@
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .psri-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(13, 148, 136, 0.4); }
+.psri-btn-primary:disabled,
+.psri-btn-primary:disabled:hover {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
 .psri-btn-ghost {
   background: var(--psri-surface);
@@ -475,6 +482,7 @@
   word-break: break-word;
 }
 .psri-wa-tpl-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.psri-wa-sendwrap { display: inline-flex; }
 .psri-wa-flash {
   display: inline-block;
   margin: 0 0 10px;

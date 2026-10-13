@@ -89,8 +89,16 @@ function parseCasesCsv(text) {
 // more than one, so it is tracked per case + template.
 const rowId = (c, key) => `${c.id}:${key}`;
 
-const COPIED_STORE = 'psri.wa.copied.v1';
-function loadCopied() {
+// ── Group action buttons on this page ────────────────────────────────────────
+// The button is a generic "Send in group" (the desk it targets is named in the
+// tooltip) rather than the old per-desk "Open <Desk> →". Desks listed in
+// HIDDEN_GROUP_BUTTONS get no button at all, and sending is not wired up yet so
+// the buttons are disabled.
+const SEND_IN_GROUP_LABEL = 'Send in group';
+const HIDDEN_GROUP_BUTTONS = new Set(['highValueGeneral']);
+const GROUP_SEND_ENABLED = false;
+
+const COPIED_STORE = 'psri.wa.copied.v1';function loadCopied() {
   try {
     const v = JSON.parse(localStorage.getItem(COPIED_STORE) || '[]');
     return Array.isArray(v) ? v : [];
@@ -252,27 +260,28 @@ export default function WhatsAppListPage() {
           </button>
         )}
 
-        {groups.length === 0 && (
-          <span className="cp-hint" style={{ margin: 0 }}>No department group mapped.</span>
-        )}
-        {groups.map(g => (
-          g.url ? (
-            <a
+        {(() => {
+          const visible = groups.filter(g => !HIDDEN_GROUP_BUTTONS.has(g.id));
+          if (visible.length === 0) {
+            return (
+              <span className="cp-hint" style={{ margin: 0 }}>
+                {groups.length > 0 ? 'Group for this notification is not set up yet.' : 'No department group mapped.'}
+              </span>
+            );
+          }
+          const many = visible.length > 1;
+          return visible.map(g => (
+            <span
               key={g.id}
-              className="psri-btn-primary"
-              href={g.url}
-              target="_blank"
-              rel="noreferrer"
-              title={`Open ${g.label} in WhatsApp`}
+              className="psri-wa-sendwrap"
+              title={`Send to ${g.label}${g.url ? '' : ' — group link not set'}`}
             >
-              Open {g.label} →
-            </a>
-          ) : (
-            <span key={g.id} className="psri-wa-nolink" title="Add this group in Admin → Picklists → WhatsApp Groups">
-              {g.label}: link not set
+              <button type="button" className="psri-btn-primary" disabled={!GROUP_SEND_ENABLED}>
+                {many ? `${SEND_IN_GROUP_LABEL} · ${g.label}` : SEND_IN_GROUP_LABEL}
+              </button>
             </span>
-          )
-        ))}
+          ));
+        })()}
       </div>
     </article>
   );
