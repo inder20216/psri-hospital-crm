@@ -1027,10 +1027,11 @@ export default function CasesPage() {
                 </div>
                 <div className="psri-field">
                   <label>Specialty <span className="psri-hint-inline">(narrows Doctor)</span> <GuidanceTip callFor={form.callFor} field="Specialty" /></label>
-                  <select value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value, doctorName: '' }))}>
-                    <option value="">— Select —</option>
-                    {getList('Specialty').map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={form.specialty}
+                    onChange={v => setForm(f => ({ ...f, specialty: v, doctorName: '' }))}
+                    options={getList('Specialty')}
+                  />
                   <SpecialtyInfo specialty={form.specialty} />
                 </div>
                 <div className="psri-field">
@@ -1176,10 +1177,11 @@ export default function CasesPage() {
                 </div>
                 <div className="psri-field">
                   <label>Specialty Enquired For</label>
-                  <select value={form.specialtyEnquiredFor} onChange={e => setForm(f => ({ ...f, specialtyEnquiredFor: e.target.value }))}>
-                    <option value="">— Select —</option>
-                    {getList('Specialty').map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={form.specialtyEnquiredFor}
+                    onChange={v => setForm(f => ({ ...f, specialtyEnquiredFor: v }))}
+                    options={getList('Specialty')}
+                  />
                 </div>
               </div>
             </div>
