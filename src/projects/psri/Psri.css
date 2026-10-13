@@ -402,6 +402,79 @@
   padding: 6px 10px;
 }
 
+/* ── WHATSAPP NOTIFICATION LIST (numbered templates 1–4) ── */
+.psri-wa-legend { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+.psri-wa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--psri-text-2);
+  background: var(--psri-surface);
+  border: 1px solid var(--psri-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.psri-wa-chip:hover { border-color: #0d9488; }
+.psri-wa-chip.active { background: #0d9488; border-color: #0d9488; color: #fff; }
+.psri-wa-chip-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #0d9488;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.psri-wa-chip.active .psri-wa-chip-num { background: rgba(255, 255, 255, 0.28); }
+
+.psri-wa-tpl { margin-bottom: 22px; }
+.psri-wa-tpl-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.psri-wa-tpl-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: #0d9488;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+.psri-wa-tpl-title { margin: 0; font-size: 15px; font-weight: 800; color: var(--psri-text); }
+.psri-wa-tpl-sub { margin: 2px 0 0; font-size: 11.5px; color: var(--psri-text-3); }
+.psri-wa-tpl-row {
+  background: var(--psri-surface);
+  border: 1px solid var(--psri-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.psri-wa-tpl-rowhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.psri-wa-tpl-rowhead strong { font-size: 14px; color: var(--psri-text); }
+.psri-wa-tpl-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.psri-wa-msg {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--psri-border);
+  border-radius: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--psri-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.psri-wa-tpl-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+
 /* ── CONTACT PICKER ── */
 .cp-wrap { position: relative; }
 .cp-hint { font-size: 12px; color: var(--psri-text-3); margin-top: 8px; }
