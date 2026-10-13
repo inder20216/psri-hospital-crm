@@ -24,12 +24,21 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     proxy: {
-      // Workflow automation PHP API — run it locally with:
-      //   php -S localhost:8000 PSRI/Workflows/php/api.php
+      // Workflow automation PHP API.
+      //
+      // Pointed at the LIVE API: the local server on :8000 runs an older copy of
+      // the code that has no cases endpoints, so the WhatsApp list could not load
+      // anything locally. The live host serves the same database, so this is
+      // equivalent to local — just with the current code.
+      //
+      // To run against a local PHP server instead, swap the two blocks: use
+      // target 'http://localhost:8000' and add
+      //   rewrite: (path) => path.replace(/^\/psri-api/, ''),
+      // started with:  php -S localhost:8000 PSRI/Workflows/php/api.php
       '/psri-api': {
-        target: 'http://localhost:8000',
+        target: 'https://43.204.141.221.nip.io',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/psri-api/, ''),
+        secure: true,
       },
       '/psri-webhook': {
         target: 'https://automation.openmindhelpline.com',
