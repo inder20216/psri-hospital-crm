@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { usePicklists } from '../../context/PicklistsContext';
 import { useUsers } from '../../context/UsersContext';
 import { useAuth } from '../../context/AuthContext';
@@ -129,7 +129,9 @@ export default function ProspectsPage() {
   const [selectedIds, setSelectedIds]     = useState(new Set()); // bulk-assign checkboxes — Admin/Super Admin only
   const [bulkAssignTo, setBulkAssignTo]   = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
-  const [remarksOpenId, setRemarksOpenId] = useState(''); // which card's remarks popover is open, if any
+  const [remarksOpenId, setRemarksOpenId] = useState(''); // which card's remarks popover is open, if any — agents only, admin sees remarks inline
+  const [adminTab, setAdminTab]           = useState('New'); // Admin/Super Admin only: 'New' | 'Other'
+  const [quickSelectCount, setQuickSelectCount] = useState('');
   const [edit, setEdit]           = useState(emptyEdit);
   const [saving, setSaving]       = useState(false);
   const [saveErr, setSaveErr]     = useState('');
@@ -167,6 +169,29 @@ export default function ProspectsPage() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // "New" = nobody's worked it yet — same definition the card's own "New"
+  // badge already uses (no lead status set). Admins get it as a tab filter
+  // (so they can round-robin fresh leads); agents get it as the sort order
+  // on their own assigned leads, so untouched ones always surface first.
+  const isNewLead = (p) => !p.leadStatus;
+
+  const visibleProspects = useMemo(() => {
+    if (isAdmin) {
+      return prospects.filter(p => adminTab === 'New' ? isNewLead(p) : !isNewLead(p));
+    }
+    const mine = prospects.filter(p => p.assignedTo === currentUser?.id);
+    // Stable sort (spec-guaranteed since ES2019) — New-leads partition moves
+    // to the front, already-attempted ones follow, each group keeping its
+    // existing relative order.
+    return [...mine].sort((a, b) => (isNewLead(a) === isNewLead(b)) ? 0 : (isNewLead(a) ? -1 : 1));
+  }, [prospects, isAdmin, adminTab, currentUser]);
+
+  const handleQuickSelect = () => {
+    const n = parseInt(quickSelectCount, 10);
+    if (!n || n <= 0) return;
+    setSelectedIds(new Set(visibleProspects.slice(0, n).map(p => p.id)));
+  };
 
   const select = (p) => {
     setSelected(p);
@@ -318,13 +343,45 @@ export default function ProspectsPage() {
           <h1 className="psri-title">Prospects</h1>
           <p className="psri-subtitle">PSRI Hospital — Unconverted Enquiries</p>
         </div>
-        <span className="psri-count">{prospects.length} prospect{prospects.length !== 1 ? 's' : ''}</span>
+        <span className="psri-count">{visibleProspects.length} prospect{visibleProspects.length !== 1 ? 's' : ''}</span>
       </div>
 
       {loadErr && <div className="psri-err-banner">{loadErr}</div>}
 
       <div className="psri-layout">
         <div className="psri-list">
+          {isAdmin && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              {['New', 'Other'].map(tab => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={adminTab === tab ? 'psri-btn-primary' : 'psri-btn-ghost'}
+                  onClick={() => { setAdminTab(tab); setQuickSelectCount(''); }}
+                  style={{ fontSize: 13 }}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {isAdmin && adminTab === 'New' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <input
+                type="number"
+                min="1"
+                placeholder="e.g. 5"
+                value={quickSelectCount}
+                onChange={e => setQuickSelectCount(e.target.value)}
+                style={{ width: 90 }}
+              />
+              <button type="button" className="psri-btn-ghost" onClick={handleQuickSelect} style={{ fontSize: 13 }}>
+                Select first {quickSelectCount || 'N'}
+              </button>
+            </div>
+          )}
+
           {isAdmin && selectedIds.size > 0 && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
@@ -344,10 +401,14 @@ export default function ProspectsPage() {
           )}
 
           {loading && <div className="psri-empty">Loading prospects…</div>}
-          {!loading && !loadErr && prospects.length === 0 && (
-            <div className="psri-empty">No open prospects right now — every enquiry has been converted or closed out.</div>
+          {!loading && !loadErr && visibleProspects.length === 0 && (
+            <div className="psri-empty">
+              {isAdmin
+                ? `No ${adminTab === 'New' ? 'new' : 'in-progress'} leads right now.`
+                : 'No open prospects assigned to you right now.'}
+            </div>
           )}
-          {!loading && prospects.map(p => {
+          {!loading && visibleProspects.map(p => {
             const noteText = p.remarks || p.originalSummary;
             const noteIsRemark = !!p.remarks;
             return (
@@ -368,10 +429,12 @@ export default function ProspectsPage() {
                   <span>{p.contactMobile}</span>
                   <span className="psri-badge">{p.leadStatus || 'New'}</span>
                   {p.attempts > 0 && <span className="psri-badge">{p.attempts} attempt{p.attempts !== 1 ? 's' : ''}</span>}
-                  {/* Icon toggle instead of inline text — keeps every card the
-                      same height regardless of remark length; the right-side
-                      form is what actually needs the vertical room. */}
-                  {noteText && (
+                  {/* Icon toggle for agents — keeps every card the same height
+                      regardless of remark length. Admins get the full text
+                      inline below instead (next block): a TL assigning leads
+                      needs to read it straight away, not click to expand
+                      every single card while triaging a list. */}
+                  {!isAdmin && noteText && (
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); setRemarksOpenId(id => id === p.id ? '' : p.id); }}
@@ -387,13 +450,18 @@ export default function ProspectsPage() {
                   )}
                 </div>
                 {p.enquiryTypes && <div className="cp-hint" style={{ margin: '2px 0 0' }}>{p.enquiryTypes}</div>}
+                {isAdmin && noteText && (
+                  <div className="cp-hint" style={{ margin: '2px 0 0', whiteSpace: 'pre-wrap' }}>
+                    {noteIsRemark ? '📝 ' : '📞 '}{noteText}
+                  </div>
+                )}
                 {isAdmin && (
                   <div className="cp-hint" style={{ margin: '2px 0 0' }}>
                     {p.assignedTo ? (users.find(u => u.id === p.assignedTo)?.name || 'Unknown agent') : 'Unassigned'}
                   </div>
                 )}
               </div>
-              {remarksOpenId === p.id && noteText && (
+              {!isAdmin && remarksOpenId === p.id && noteText && (
                 <div
                   onClick={e => e.stopPropagation()}
                   style={{

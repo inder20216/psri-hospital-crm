@@ -650,9 +650,26 @@ export default function CasesPage() {
   // contactId (falling back to mobile for older rows saved before that FK
   // existed), newest activity first, with the full case list attached so the
   // detail pane can show complete history instead of a single case.
+  // A case counts as "today" in the agent's own browser-local day, not UTC —
+  // matches how every other date display in this page already reads.
+  const isTodayLocal = (iso) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  };
+
   const patientGroups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    // Non-admins land on just their own cases from today — decluttered
+    // default worklist. The moment they type anything into search, it looks
+    // across every case regardless (same as admins always see, searched or not).
+    const baseCases = (!q && !isAdmin)
+      ? cases.filter(c => c.assignedTo === currentAgentId && isTodayLocal(c.created))
+      : cases;
+
     const groups = new Map();
-    for (const c of cases) {
+    for (const c of baseCases) {
       const key = c.contactId || c.contactMobile || c.id;
       if (!groups.has(key)) {
         groups.set(key, { key, contactId: c.contactId, contactName: c.contactName, contactMobile: c.contactMobile, cases: [] });
@@ -665,7 +682,6 @@ export default function CasesPage() {
     });
     all.sort((a, b) => new Date(b.latest?.created || 0) - new Date(a.latest?.created || 0));
 
-    const q = query.trim().toLowerCase();
     if (!q) return all;
     return all.filter(g => g.cases.some(c =>
       (c.contactName || '').toLowerCase().includes(q) ||
@@ -673,7 +689,7 @@ export default function CasesPage() {
       (c.summary || '').toLowerCase().includes(q) ||
       (c.id || '').toLowerCase().includes(q)
     ));
-  }, [cases, query]);
+  }, [cases, query, isAdmin, currentAgentId]);
 
   const selectedGroup = useMemo(
     () => patientGroups.find(g => g.key === selectedKey) || null,
@@ -1011,10 +1027,11 @@ export default function CasesPage() {
                 </div>
                 <div className="psri-field">
                   <label>Specialty <span className="psri-hint-inline">(narrows Doctor)</span> <GuidanceTip callFor={form.callFor} field="Specialty" /></label>
-                  <select value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value, doctorName: '' }))}>
-                    <option value="">— Select —</option>
-                    {getList('Specialty').map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={form.specialty}
+                    onChange={v => setForm(f => ({ ...f, specialty: v, doctorName: '' }))}
+                    options={getList('Specialty')}
+                  />
                   <SpecialtyInfo specialty={form.specialty} />
                 </div>
                 <div className="psri-field">
@@ -1160,10 +1177,11 @@ export default function CasesPage() {
                 </div>
                 <div className="psri-field">
                   <label>Specialty Enquired For</label>
-                  <select value={form.specialtyEnquiredFor} onChange={e => setForm(f => ({ ...f, specialtyEnquiredFor: e.target.value }))}>
-                    <option value="">— Select —</option>
-                    {getList('Specialty').map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={form.specialtyEnquiredFor}
+                    onChange={v => setForm(f => ({ ...f, specialtyEnquiredFor: v }))}
+                    options={getList('Specialty')}
+                  />
                 </div>
               </div>
             </div>

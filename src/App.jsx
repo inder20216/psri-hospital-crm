@@ -143,9 +143,11 @@ function AppShell() {
                         <Route path="/admin/productivity" element={<main className="ucrm-main"><ProductivityPage /></main>} />
                         <Route path="/admin/reports"       element={<main className="ucrm-main"><ReportsPage /></main>} />
                         <Route path="/admin/appreciation"  element={<main className="ucrm-main"><AppreciationPage /></main>} />
-                        <Route path="/admin/picklist-suggestions" element={<main className="ucrm-main"><PicklistSuggestionsPage /></main>} />
                       </>
                     )}
+                    {/* Every signed-in user — not just Admins — can see the status of their
+                        own suggestions here; the page itself gates the review controls. */}
+                    <Route path="/admin/picklist-suggestions" element={<main className="ucrm-main"><PicklistSuggestionsPage /></main>} />
                     <Route path="/admin/*" element={<Navigate to="/psri/contacts" replace />} />
                     <Route path="/" element={<Navigate to="/psri/contacts" replace />} />
                   </Routes>

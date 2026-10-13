@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { psri } from '../api/psri';
 import { useAuth } from '../context/AuthContext';
+import { markSeen } from '../projects/psri/suggestionsSeen';
 import './Admin.css';
 
 const STATUS_TABS = [
@@ -16,12 +17,16 @@ function fmtWhen(iso) {
 }
 
 export default function PicklistSuggestionsPage() {
-  const { currentUser } = useAuth();
-  const [status, setStatus] = useState('pending');
+  const { currentUser, isAdmin } = useAuth();
+  // Admins land on Pending (their actionable queue); everyone else lands on
+  // All — they're just checking outcomes, and their own resolved items
+  // otherwise wouldn't even be in `items` to mark seen below.
+  const [status, setStatus] = useState(isAdmin ? 'pending' : '');
   const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
   const [reviewingId, setReviewingId] = useState(0);
+  const [editValues, setEditValues] = useState({}); // { [id]: corrected text } — Admin only, lets a typo get fixed before approving
   const [toast, setToast] = useState('');
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
@@ -37,14 +42,32 @@ export default function PicklistSuggestionsPage() {
 
   useEffect(() => { refresh(status); }, [status, refresh]);
 
+  // Non-admins only ever see what they themselves suggested — so they can
+  // check whether it was approved, rejected, or approved with a correction
+  // — never anyone else's.
+  const visibleItems = isAdmin ? items : items.filter(it => it.suggestedBy === currentUser?.id);
+
+  // Opening this page is what "reads" a resolved suggestion — marks every
+  // own, already-decided item seen so the rail's notification count clears.
+  // Depends on `items`/`currentUser` directly (not `visibleItems`, a new
+  // array every render) so this only runs when the data actually changes.
+  useEffect(() => {
+    if (isAdmin) return;
+    const resolved = items.filter(it => it.suggestedBy === currentUser?.id && it.status !== 'pending');
+    if (resolved.length) markSeen(resolved);
+  }, [items, isAdmin, currentUser]);
+
   const review = async (item, approved) => {
     setReviewingId(item.id);
     try {
+      const corrected = (editValues[item.id] || '').trim();
       const res = await psri.reviewPicklistSuggestion({
         id: item.id, approved,
+        correctedValue: corrected && corrected !== item.value ? corrected : '',
         reviewerId: currentUser?.id || '', reviewerName: currentUser?.name || '',
       });
       showToast(res.warning ? res.warning : (approved ? 'Approved — now live in the picklist' : 'Rejected'));
+      setEditValues(v => { const next = { ...v }; delete next[item.id]; return next; });
       await refresh(status);
     } catch (err) {
       showToast(err.message || 'Could not save review. Please try again.');
@@ -58,7 +81,11 @@ export default function PicklistSuggestionsPage() {
       <div className="admin-top">
         <div>
           <h1 className="admin-title">Picklist Suggestions</h1>
-          <p className="admin-subtitle">New values agents proposed from the Cases form (currently Name of Procedure) — approve to make them selectable for everyone, or reject.</p>
+          <p className="admin-subtitle">
+            {isAdmin
+              ? 'New values agents proposed from the Cases form (currently Name of Procedure) — correct a typo if needed, then approve to make it selectable for everyone, or reject.'
+              : 'New values you proposed from the Cases form — see whether each was approved, corrected, or rejected.'}
+          </p>
         </div>
       </div>
 
@@ -79,9 +106,9 @@ export default function PicklistSuggestionsPage() {
 
       {loading ? (
         <div className="admin-table-loading">Loading…</div>
-      ) : items.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <div className="admin-table-wrap" style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>
-          No {status || ''} suggestions.
+          No {status || ''} suggestions{isAdmin ? '' : ' from you'}.
         </div>
       ) : (
         <div className="admin-table-wrap">
@@ -93,14 +120,25 @@ export default function PicklistSuggestionsPage() {
                 <th>Suggested By</th>
                 <th>When</th>
                 <th>Status</th>
-                {status === 'pending' && <th>Actions</th>}
+                {isAdmin && status === 'pending' && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {items.map(it => (
+              {visibleItems.map(it => {
+                const editable = isAdmin && it.status === 'pending';
+                return (
                 <tr key={it.id}>
                   <td>{it.listName}</td>
-                  <td style={{ fontWeight: 700 }}>{it.value}</td>
+                  <td style={{ fontWeight: 700 }}>
+                    {editable ? (
+                      <input
+                        type="text"
+                        value={editValues[it.id] ?? it.value}
+                        onChange={e => setEditValues(v => ({ ...v, [it.id]: e.target.value }))}
+                        style={{ minWidth: 200 }}
+                      />
+                    ) : it.value}
+                  </td>
                   <td>{it.suggestedByName || it.suggestedBy || '—'}</td>
                   <td>{fmtWhen(it.created)}</td>
                   <td>
@@ -108,7 +146,7 @@ export default function PicklistSuggestionsPage() {
                     {it.status === 'approved' && <span style={{ color: '#15803d', fontWeight: 700 }}>Approved by {it.reviewedByName}</span>}
                     {it.status === 'rejected' && <span style={{ color: '#b91c1c', fontWeight: 700 }}>Rejected by {it.reviewedByName}</span>}
                   </td>
-                  {status === 'pending' && (
+                  {isAdmin && status === 'pending' && (
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="admin-btn-primary" style={{ background: '#15803d', fontSize: 12, padding: '6px 10px' }} disabled={reviewingId === it.id} onClick={() => review(it, true)}>Approve</button>
@@ -117,7 +155,7 @@ export default function PicklistSuggestionsPage() {
                     </td>
                   )}
                 </tr>
-              ))}
+              );})}
             </tbody>
           </table>
         </div>
