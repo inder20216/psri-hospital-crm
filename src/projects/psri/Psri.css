@@ -448,6 +448,7 @@
   font-weight: 800;
   flex: 0 0 auto;
 }
+.psri-wa-tpl-num--muted { background: #94a3b8; }
 .psri-wa-tpl-title { margin: 0; font-size: 15px; font-weight: 800; color: var(--psri-text); }
 .psri-wa-tpl-sub { margin: 2px 0 0; font-size: 11.5px; color: var(--psri-text-3); }
 .psri-wa-tpl-row {

@@ -52,6 +52,11 @@ export const psri = {
   // Accepts either a bare search string or an options object ({ q, status })
   // — status is an exact-match filter (e.g. 'Incomplete'), q is a fuzzy search.
   getCases:   (opts) => get('psri-cases', typeof opts === 'string' ? { q: opts } : (opts || {}), WF_BASE),
+  // The plain psri-cases route caps at the 50 most recent rows. The export
+  // route streams every case as CSV, so screens that need the full list parse
+  // it instead (see WhatsAppListPage).
+  getCasesCsv: () => fetch(`${WF_BASE}/psri-cases-export`, { headers: { Accept: 'text/csv' } })
+    .then(r => (r.ok ? r.text() : Promise.reject(new Error(`psri-cases-export failed: ${r.status}`)))),
   addCase:    (data) => post('psri-case-add', data, WF_BASE),
   updateCase: (data) => post('psri-case-update', data, WF_BASE),
   // "Case Created" automations — call once a case is really saved (not for

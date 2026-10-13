@@ -65,9 +65,9 @@ export default function ProjectRail() {
                 <span className="rail-icon">{p.icon}</span>
                 {expanded && <span className="rail-label">{p.name}</span>}
               </Link>
-              {expanded && isActiveProject && p.modules.length > 0 && (
+              {expanded && isActiveProject && p.modules.filter(m => !m.hidden).length > 0 && (
                 <div className="rail-submodules">
-                  {p.modules.map(mod => (
+                  {p.modules.filter(m => !m.hidden).map(mod => (
                     <Link
                       key={mod.path}
                       to={`/${p.id}${mod.path}`}
@@ -93,6 +93,17 @@ export default function ProjectRail() {
       </div>
 
       <div className="rail-bottom">
+        {/* WhatsApp notification list — sits on top, just above Settings */}
+        <Link
+          to="/psri/whatsapp"
+          className={`rail-item ${pathname === '/psri/whatsapp' ? 'active' : ''}`}
+          style={{ '--rail-color': '#25d366' }}
+          title="WhatsApp Notifications"
+        >
+          <span className="rail-icon">💬</span>
+          {expanded && <span className="rail-label">WhatsApp</span>}
+        </Link>
+
         {/* Settings — Super Admin only */}
         {isSuperAdmin && (
           <div className="rail-project-group">

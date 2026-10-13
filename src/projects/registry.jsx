@@ -17,7 +17,7 @@ export const PROJECTS = [
     modules: [
       { path: '/contacts',          label: 'Contacts',          icon: '👤', element: <ContactsPage /> },
       { path: '/cases',             label: 'Cases',             icon: '🗂️', element: <CasesPage /> },
-      { path: '/whatsapp',          label: 'WhatsApp',          icon: '💬', element: <WhatsAppListPage /> },
+      { path: '/whatsapp',          label: 'WhatsApp',          icon: '💬', element: <WhatsAppListPage />, hidden: true },
       { path: '/incomplete-cases',  label: 'Incomplete Cases',  icon: '📝', element: <IncompleteCasesPage /> },
       { path: '/prospects',         label: 'Prospects',         icon: '🎯', element: <ProspectsPage /> },
       { path: '/call-logs',         label: 'Call Logs',         icon: '☎️', element: <CallLogsPage /> },
