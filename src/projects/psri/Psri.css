@@ -475,6 +475,17 @@
   word-break: break-word;
 }
 .psri-wa-tpl-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.psri-wa-flash {
+  display: inline-block;
+  margin: 0 0 10px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 600;
+}
 
 /* ── CONTACT PICKER ── */
 .cp-wrap { position: relative; }

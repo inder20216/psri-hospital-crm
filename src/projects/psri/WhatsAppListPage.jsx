@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { psri } from '../../api/psri';
 import { usePicklists } from '../../context/PicklistsContext';
 import { resolveWhatsAppGroups, groupInviteLink } from './whatsappGroups';
@@ -85,17 +85,36 @@ function parseCasesCsv(text) {
     }));
 }
 
-// The WhatsApp list — EVERY case, grouped under the four numbered templates
-// from the process doc (a case can appear under more than one), plus the cases
-// that trigger none of them.
+// A "notification" is one case under one template — the same case can trigger
+// more than one, so it is tracked per case + template.
+const rowId = (c, key) => `${c.id}:${key}`;
+
+const COPIED_STORE = 'psri.wa.copied.v1';
+function loadCopied() {
+  try {
+    const v = JSON.parse(localStorage.getItem(COPIED_STORE) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+function saveCopied(list) {
+  try { localStorage.setItem(COPIED_STORE, JSON.stringify(list)); } catch { /* private mode */ }
+}
+
+// The WhatsApp list — every case that triggers one of the four numbered
+// templates. Copying a notification moves it to the "Copied" list and out of
+// the main list.
 export default function WhatsAppListPage() {
   const { getList } = usePicklists();
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
-  const [filter, setFilter] = useState('');   // '' = all, else a template key
+  const [filter, setFilter] = useState('');   // '' = all, 'copied', else a template key
   const [query, setQuery] = useState('');
-  const [copiedKey, setCopiedKey] = useState('');
+  const [copied, setCopied] = useState(loadCopied);
+  const [flash, setFlash] = useState('');
+  const flashTimer = useRef(null);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -114,6 +133,14 @@ export default function WhatsAppListPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
+
+  const showFlash = useCallback(text => {
+    setFlash(text);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(''), 3000);
+  }, []);
+
   // Tag each case with the templates it matches + the department group(s) to
   // notify, so a row can be copied and the right group opened in one click.
   const rows = useMemo(() => cases.map(c => ({
@@ -125,36 +152,78 @@ export default function WhatsAppListPage() {
     })),
   })), [cases, getList]);
 
+  const copiedSet = useMemo(() => new Set(copied), [copied]);
+
+  // Only cases that trigger a template are listed — a case with no match has no
+  // notification to send, so it simply is not shown.
+  const activeRows = useMemo(() => rows.filter(r => r.keys.length > 0), [rows]);
+
+  const searched = useMemo(() => activeRows.filter(r => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    const hay = [r.c.contactName, r.c.contactMobile, r.c.summary, r.c.callFor]
+      .map(v => String(v || '').toLowerCase()).join(' ');
+    return hay.includes(q);
+  }), [activeRows, query]);
+
   const counts = useMemo(() => {
     const map = Object.fromEntries(WA_TEMPLATES.map(t => [t.key, 0]));
-    rows.forEach(r => r.keys.forEach(k => { map[k] = (map[k] || 0) + 1; }));
+    rows.forEach(r => r.keys.forEach(k => { if (!copiedSet.has(rowId(r.c, k))) map[k] += 1; }));
     return map;
-  }, [rows]);
+  }, [rows, copiedSet]);
 
-  const filtered = useMemo(() => rows.filter(r => {
-    if (filter === 'none') { if (r.keys.length > 0) return false; }
-    else if (filter && !r.keys.includes(filter)) return false;
-    if (query) {
-      const q = query.toLowerCase();
-      const hay = [r.c.contactName, r.c.contactMobile, r.c.summary, r.c.callFor]
-        .map(v => String(v || '').toLowerCase()).join(' ');
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  }), [rows, filter, query]);
+  const allCount = useMemo(
+    () => rows.filter(r => r.keys.some(k => !copiedSet.has(rowId(r.c, k)))).length,
+    [rows, copiedSet],
+  );
 
-  const unmatchedCount = useMemo(() => rows.filter(r => r.keys.length === 0).length, [rows]);
+  // Copied notifications, newest case first (rows come from the CSV in date order).
+  const copiedItems = useMemo(() => {
+    const out = [];
+    searched.forEach(r => r.keys.forEach(k => {
+      if (copiedSet.has(rowId(r.c, k))) out.push({ c: r.c, groups: r.groups, key: k });
+    }));
+    return out;
+  }, [searched, copiedSet]);
+
+  const copiedCount = useMemo(
+    () => rows.reduce((n, r) => n + r.keys.filter(k => copiedSet.has(rowId(r.c, k))).length, 0),
+    [rows, copiedSet],
+  );
+
+  const markCopied = useCallback((c, key) => {
+    const id = rowId(c, key);
+    setCopied(prev => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      saveCopied(next);
+      return next;
+    });
+    showFlash('Copied ✓ — moved to the Copy list');
+  }, [showFlash]);
+
+  const restore = useCallback(id => {
+    setCopied(prev => {
+      const next = prev.filter(x => x !== id);
+      saveCopied(next);
+      return next;
+    });
+  }, []);
+
+  const clearCopied = useCallback(() => {
+    setCopied([]);
+    saveCopied([]);
+  }, []);
 
   const copyMessage = async (c, key) => {
     await copyText(buildWaMessage(key, c));
-    setCopiedKey(`${c.id}:${key}`);
-    setTimeout(() => setCopiedKey(''), 2000);
+    markCopied(c, key);
   };
 
-  // One rendered row (used by both the numbered sections and the "no
-  // notification" bucket). `key` is a template key, or 'none'.
-  const renderCase = (c, groups, key) => (
-    <article key={`${c.id}:${key}`} className="psri-wa-tpl-row">
+  // One rendered notification card. `isCopied` switches the primary action from
+  // "Copy message" (which moves it to the Copy list) to "Restore".
+  const renderCard = (c, groups, key, isCopied) => (
+    <article key={rowId(c, key)} className="psri-wa-tpl-row">
       <div className="psri-wa-tpl-rowhead">
         <strong>{c.contactName || 'Unknown Contact'}</strong>
         <span className="cp-hint" style={{ margin: 0 }}>{fmtWhen(c.created)}</span>
@@ -165,18 +234,28 @@ export default function WhatsAppListPage() {
         {c.status && <span className="psri-badge">{c.status}</span>}
       </div>
 
-      {key !== 'none' && <pre className="psri-wa-msg">{buildWaMessage(key, c)}</pre>}
+      <pre className="psri-wa-msg">{buildWaMessage(key, c)}</pre>
 
       <div className="psri-wa-tpl-actions">
-        {key !== 'none' && (
+        {isCopied ? (
+          <>
+            <button type="button" className="psri-btn-ghost" onClick={() => restore(rowId(c, key))}>
+              ↺ Restore
+            </button>
+            <button type="button" className="psri-btn-ghost" onClick={() => copyText(buildWaMessage(key, c))}>
+              Copy again
+            </button>
+          </>
+        ) : (
           <button type="button" className="psri-btn-ghost" onClick={() => copyMessage(c, key)}>
-            {copiedKey === `${c.id}:${key}` ? 'Copied ✓' : 'Copy message'}
+            Copy message
           </button>
         )}
-        {key !== 'none' && groups.length === 0 && (
+
+        {groups.length === 0 && (
           <span className="cp-hint" style={{ margin: 0 }}>No department group mapped.</span>
         )}
-        {key !== 'none' && groups.map(g => (
+        {groups.map(g => (
           g.url ? (
             <a
               key={g.id}
@@ -198,14 +277,23 @@ export default function WhatsAppListPage() {
     </article>
   );
 
+  const isCopiedView = filter === 'copied';
   const visibleTemplates = WA_TEMPLATES.filter(t => !filter || filter === t.key);
+
+  const shownCount = isCopiedView
+    ? copiedItems.length
+    : (filter
+      ? searched.filter(r => r.keys.includes(filter) && !copiedSet.has(rowId(r.c, filter))).length
+      : allCount);
+
+  const noNotifications = !loading && !loadErr && activeRows.length === 0;
 
   return (
     <div className="psri-page">
       <div className="psri-page-head">
         <div>
           <h1 className="psri-title">WhatsApp Notifications</h1>
-          <p className="psri-subtitle">PSRI Hospital — every case, grouped by the notification it triggers</p>
+          <p className="psri-subtitle">PSRI Hospital — cases grouped by the notification they trigger. Copying one files it under “Copied”.</p>
         </div>
         <button type="button" className="psri-btn-ghost" onClick={refresh}>↻ Refresh</button>
       </div>
@@ -218,7 +306,7 @@ export default function WhatsAppListPage() {
           className={`psri-wa-chip${filter === '' ? ' active' : ''}`}
           onClick={() => setFilter('')}
         >
-          All · {rows.length}
+          All · {allCount}
         </button>
         {WA_TEMPLATES.map(t => (
           <button
@@ -233,11 +321,11 @@ export default function WhatsAppListPage() {
         ))}
         <button
           type="button"
-          className={`psri-wa-chip${filter === 'none' ? ' active' : ''}`}
-          onClick={() => setFilter(f => (f === 'none' ? '' : 'none'))}
-          title="Cases that do not trigger any of the four templates"
+          className={`psri-wa-chip${isCopiedView ? ' active' : ''}`}
+          onClick={() => setFilter(f => (f === 'copied' ? '' : 'copied'))}
+          title="Notifications you have already copied"
         >
-          No notification · {unmatchedCount}
+          ✓ Copied · {copiedCount}
         </button>
       </div>
 
@@ -250,22 +338,24 @@ export default function WhatsAppListPage() {
           onChange={e => setQuery(e.target.value)}
         />
         <span className="psri-count">
-          {filtered.length} case{filtered.length !== 1 ? 's' : ''}
+          {shownCount} {isCopiedView ? 'notification' : 'case'}{shownCount !== 1 ? 's' : ''}
         </span>
       </div>
 
+      {flash && <div className="psri-wa-flash">{flash}</div>}
+
       {loading && <div className="psri-empty">Loading cases…</div>}
 
-      {!loading && !loadErr && cases.length === 0 && (
-        <div className="psri-empty">No cases yet — WhatsApp notifications appear here once a Case is submitted.</div>
+      {noNotifications && (
+        <div className="psri-empty">No WhatsApp notifications yet — they appear here once a Case matches one of the four templates.</div>
       )}
 
-      {!loading && !loadErr && cases.length > 0 && filtered.length === 0 && (
-        <div className="psri-empty">No cases match this filter.</div>
+      {!loading && !loadErr && !noNotifications && shownCount === 0 && (
+        <div className="psri-empty">No notifications match this view.</div>
       )}
 
       {!loading && visibleTemplates.map(t => {
-        const list = filtered.filter(r => r.keys.includes(t.key));
+        const list = searched.filter(r => r.keys.includes(t.key) && !copiedSet.has(rowId(r.c, t.key)));
         if (list.length === 0 && !filter) return null; // hide empty sections in the "All" view
         return (
           <section key={t.key} className="psri-wa-tpl">
@@ -278,29 +368,35 @@ export default function WhatsAppListPage() {
             </div>
             {list.length === 0
               ? <div className="psri-empty">No cases match this template.</div>
-              : list.map(({ c, groups }) => renderCase(c, groups, t.key))}
+              : list.map(({ c, groups }) => renderCard(c, groups, t.key, false))}
           </section>
         );
       })}
 
-      {(filter === '' || filter === 'none') && (() => {
-        const list = filtered.filter(r => r.keys.length === 0);
-        if (list.length === 0 && !filter) return null;
-        return (
-          <section className="psri-wa-tpl">
-            <div className="psri-wa-tpl-head">
-              <span className="psri-wa-tpl-num psri-wa-tpl-num--muted">–</span>
-              <div>
-                <h2 className="psri-wa-tpl-title">No WhatsApp notification</h2>
-                <p className="psri-wa-tpl-sub">Case matches none of the four templates · {list.length} case{list.length !== 1 ? 's' : ''}</p>
+      {(!filter || isCopiedView) && (
+        (() => {
+          if (copiedItems.length === 0 && !isCopiedView) return null; // hide when empty in the "All" view
+          return (
+            <section className="psri-wa-tpl">
+              <div className="psri-wa-tpl-head">
+                <span className="psri-wa-tpl-num psri-wa-tpl-num--muted">✓</span>
+                <div>
+                  <h2 className="psri-wa-tpl-title">Copied</h2>
+                  <p className="psri-wa-tpl-sub">Already copied — kept here for reference · {copiedItems.length} notification{copiedItems.length !== 1 ? 's' : ''}</p>
+                </div>
+                {copiedItems.length > 0 && (
+                  <button type="button" className="psri-btn-ghost" style={{ marginLeft: 'auto' }} onClick={clearCopied}>
+                    Clear list
+                  </button>
+                )}
               </div>
-            </div>
-            {list.length === 0
-              ? <div className="psri-empty">Every case triggers at least one template.</div>
-              : list.map(({ c, groups }) => renderCase(c, groups, 'none'))}
-          </section>
-        );
-      })()}
+              {copiedItems.length === 0
+                ? <div className="psri-empty">Nothing copied yet — press “Copy message” on a notification and it lands here.</div>
+                : copiedItems.map(({ c, groups, key }) => renderCard(c, groups, key, true))}
+            </section>
+          );
+        })()
+      )}
     </div>
   );
 }
