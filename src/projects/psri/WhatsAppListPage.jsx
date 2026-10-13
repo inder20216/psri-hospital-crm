@@ -173,6 +173,15 @@ export default function WhatsAppListPage() {
 
   useEffect(() => () => clearTimeout(flashTimer.current), []);
 
+  // On a phone this page is meant to stand alone: while it is open, mark the
+  // body so App.css can hide the left rail and the floating widgets (the QR
+  // code on the desktop screen exists precisely so a phone can show just this
+  // list). The class is removed again on the way out.
+  useEffect(() => {
+    document.body.classList.add('psri-wa-focus');
+    return () => document.body.classList.remove('psri-wa-focus');
+  }, []);
+
   // Esc closes the QR dialog.
   useEffect(() => {
     if (!showQr) return undefined;
@@ -343,7 +352,7 @@ export default function WhatsAppListPage() {
           <p className="psri-subtitle">PSRI Hospital — cases grouped by the notification they trigger. Copying one files it under “Copied”.</p>
         </div>
         <div className="psri-page-actions">
-          <button type="button" className="psri-btn-ghost" onClick={openQr} title="Show a QR code to open this page on a phone">
+          <button type="button" className="psri-btn-ghost psri-qr-open-btn" onClick={openQr} title="Show a QR code to open this page on a phone">
             📱 Open on phone
           </button>
           <button type="button" className="psri-btn-ghost" onClick={refresh}>↻ Refresh</button>
