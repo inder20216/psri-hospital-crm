@@ -440,34 +440,6 @@
   font-size: 15px; cursor: pointer; padding: 0 4px; line-height: 1;
 }
 .wa-float-close:hover { color: #fff; }
-.wa-float-reason {
-  padding: 6px 12px;
-  font-size: 11.5px;
-  color: var(--psri-text-3);
-  background: #f8fafc;
-  border-bottom: 1px solid var(--psri-border);
-}
-.wa-float-frame {
-  display: block;
-  width: 100%;
-  height: 420px;
-  border: 0;
-  background: #fff;
-}
-.wa-float-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--psri-border);
-}
-.wa-float-hint {
-  flex: 1 1 150px;
-  font-size: 10.5px;
-  line-height: 1.4;
-  color: var(--psri-text-3);
-}
 
 /* ── IN-CRM WHATSAPP CHAT (Cloud API) ── */
 .wa-chat-list {
