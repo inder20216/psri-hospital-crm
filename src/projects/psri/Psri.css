@@ -44,7 +44,6 @@
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
-.psri-page-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .psri-btn-primary {
   background: linear-gradient(135deg, var(--psri-primary), var(--psri-primary-dk));
@@ -450,6 +449,14 @@
   font-weight: 800;
 }
 .psri-wa-chip.active .psri-wa-chip-num { background: rgba(255, 255, 255, 0.28); }
+/* An action sitting in the filter row (the "Open on phone" QR button) — same
+   pill shape so the row lines up, tinted so it doesn't read as a filter. */
+.psri-wa-chip--action {
+  color: var(--psri-primary-dk);
+  background: var(--psri-primary-lt);
+  border-color: #99f6e4;
+}
+.psri-wa-chip--action:hover { border-color: var(--psri-primary); background: #ccfbf1; }
 
 .psri-wa-tpl { margin-bottom: 22px; }
 .psri-wa-tpl-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -685,12 +692,9 @@
   body.psri-wa-focus .psri-title { font-size: 20px; }
   body.psri-wa-focus .psri-subtitle { font-size: 12.5px; }
 
-  /* Header: title on top, actions as two big buttons underneath. The QR button
-     is pointless once you are already on the phone. */
+  /* Header: just the title now — the QR/Refresh chips live in the filter row. */
   body.psri-wa-focus .psri-page-head { gap: 10px; margin-bottom: 12px; }
-  body.psri-wa-focus .psri-page-actions { width: 100%; }
   body.psri-wa-focus .psri-qr-open-btn { display: none; }
-  body.psri-wa-focus .psri-page-actions .psri-btn-ghost { flex: 1; padding: 12px; font-size: 14px; }
 
   /* Filters + search stack cleanly. */
   body.psri-wa-focus .psri-wa-legend { gap: 6px; margin-bottom: 12px; }

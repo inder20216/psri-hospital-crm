@@ -351,12 +351,6 @@ export default function WhatsAppListPage() {
           <h1 className="psri-title">WhatsApp Notifications</h1>
           <p className="psri-subtitle">PSRI Hospital — cases grouped by the notification they trigger. Copying one files it under “Copied”.</p>
         </div>
-        <div className="psri-page-actions">
-          <button type="button" className="psri-btn-ghost psri-qr-open-btn" onClick={openQr} title="Show a QR code to open this page on a phone">
-            📱 Open on phone
-          </button>
-          <button type="button" className="psri-btn-ghost" onClick={refresh}>↻ Refresh</button>
-        </div>
       </div>
 
       {loadErr && <div className="psri-err-banner">{loadErr}</div>}
@@ -387,6 +381,22 @@ export default function WhatsAppListPage() {
           title="Notifications you have already copied"
         >
           ✓ Copied · {copiedCount}
+        </button>
+        <button
+          type="button"
+          className="psri-wa-chip psri-wa-chip--action psri-qr-open-btn"
+          onClick={openQr}
+          title="Show a QR code to open this page on a phone"
+        >
+          📱 Open on phone
+        </button>
+        <button
+          type="button"
+          className="psri-wa-chip psri-wa-chip--action"
+          onClick={refresh}
+          title="Reload the case list"
+        >
+          ↻ Refresh
         </button>
       </div>
 
