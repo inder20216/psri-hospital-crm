@@ -93,7 +93,7 @@ export default function ProjectRail() {
       </div>
 
       <div className="rail-bottom">
-        {/* WhatsApp notification list — sits on top, just above Settings */}
+        {/* WhatsApp notification list — top of the rail tools */}
         <Link
           to="/psri/whatsapp"
           className={`rail-item ${pathname === '/psri/whatsapp' ? 'active' : ''}`}
@@ -103,37 +103,6 @@ export default function ProjectRail() {
           <span className="rail-icon">💬</span>
           {expanded && <span className="rail-label">WhatsApp</span>}
         </Link>
-
-        {/* Settings — Super Admin only */}
-        {isSuperAdmin && (
-          <div className="rail-project-group">
-            <Link
-              to="/admin/users"
-              className={`rail-item ${pathname.startsWith('/admin') ? 'active' : ''}`}
-              style={{ '--rail-color': '#4338ca' }}
-              title="Settings"
-            >
-              <span className="rail-icon">⚙</span>
-              {expanded && <span className="rail-label">Settings</span>}
-            </Link>
-            {expanded && pathname.startsWith('/admin') && (
-              <div className="rail-submodules">
-                <Link to="/admin/users" className={`rail-subitem ${pathname === '/admin/users' ? 'active' : ''}`}>
-                  <span className="rail-subicon">👤</span><span>Users</span>
-                </Link>
-                <Link to="/admin/picklists" className={`rail-subitem ${pathname === '/admin/picklists' ? 'active' : ''}`}>
-                  <span className="rail-subicon">☰</span><span>Picklists</span>
-                </Link>
-                <Link to="/admin/dependencies" className={`rail-subitem ${pathname === '/admin/dependencies' ? 'active' : ''}`}>
-                  <span className="rail-subicon">🔗</span><span>Dependencies</span>
-                </Link>
-                <Link to="/admin/workflows" className={`rail-subitem ${pathname === '/admin/workflows' ? 'active' : ''}`}>
-                  <span className="rail-subicon">🔀</span><span>Workflows</span>
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Productivity dashboard — Admin and Super Admin (TL/Manager) */}
         {isAdmin && (
@@ -198,6 +167,37 @@ export default function ProjectRail() {
             </span>
             {expanded && <span className="rail-label">Suggestions</span>}
           </Link>
+        )}
+
+        {/* Settings — Super Admin only (kept below Suggestions) */}
+        {isSuperAdmin && (
+          <div className="rail-project-group">
+            <Link
+              to="/admin/users"
+              className={`rail-item ${pathname.startsWith('/admin') ? 'active' : ''}`}
+              style={{ '--rail-color': '#4338ca' }}
+              title="Settings"
+            >
+              <span className="rail-icon">⚙</span>
+              {expanded && <span className="rail-label">Settings</span>}
+            </Link>
+            {expanded && pathname.startsWith('/admin') && (
+              <div className="rail-submodules">
+                <Link to="/admin/users" className={`rail-subitem ${pathname === '/admin/users' ? 'active' : ''}`}>
+                  <span className="rail-subicon">👤</span><span>Users</span>
+                </Link>
+                <Link to="/admin/picklists" className={`rail-subitem ${pathname === '/admin/picklists' ? 'active' : ''}`}>
+                  <span className="rail-subicon">☰</span><span>Picklists</span>
+                </Link>
+                <Link to="/admin/dependencies" className={`rail-subitem ${pathname === '/admin/dependencies' ? 'active' : ''}`}>
+                  <span className="rail-subicon">🔗</span><span>Dependencies</span>
+                </Link>
+                <Link to="/admin/workflows" className={`rail-subitem ${pathname === '/admin/workflows' ? 'active' : ''}`}>
+                  <span className="rail-subicon">🔀</span><span>Workflows</span>
+                </Link>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Logged-in user avatar + logout */}
