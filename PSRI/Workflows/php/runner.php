@@ -32,7 +32,7 @@ const WF_TRIGGER_NODE = [
 const WF_LABELS = [
     'assign' => 'Assign contact', 'createCase' => 'Create case', 'updateContact' => 'Update contact',
     'sheetRow' => 'Append list row', 'webhook' => 'Call webhook', 'notify' => 'Send notification',
-    'waAutoReply' => 'WhatsApp reply', 'condition' => 'Condition',
+    'condition' => 'Condition',
 ];
 
 // Contact field key (schema.js CONTACT_FIELDS) → contacts column.
@@ -463,30 +463,6 @@ function wf_wa_recipient(string $s): string {
     return wf_wa_number($s);
 }
 
-/**
- * Reply text for an incoming WhatsApp message (the VMM Followup rules): a full
- * follow-up message is sent back unchanged, otherwise "1" → resolved,
- * "2" → no response, "3" → partially resolved, anything else → the fallback.
- */
-function wf_wa_reply_text(array $cfg, string $text): string {
-    $text = trim($text);
-    if ($text === '') return '';
-    $word = wf_lower($text);
-    $marker = wf_lower(trim(wf_scalar($cfg['marker'] ?? '')));
-    if ($marker !== '' && str_contains($word, $marker)) return $text;
-    $word = trim((string) preg_replace('/\s+/', ' ', $word));
-    foreach (['1' => 'resolved', '2' => 'noResponse', '3' => 'partial'] as $digit => $key) {
-        if ($word === (string) $digit) return trim(wf_scalar($cfg[$key] ?? ''));
-    }
-    // Word-boundary match so "no" only matches a standalone "no".
-    $has = fn (string $needle): bool => $needle !== ''
-        && preg_match('/(?<![a-z0-9])' . preg_quote($needle, '/') . '(?![a-z0-9])/u', $word) === 1;
-    if ($has('partial') || $has('partially') || $has('still pending') || $has('thoda hua')) return trim(wf_scalar($cfg['partial'] ?? ''));
-    if ($has('no response') || $has('koi response nahi') || $has('nahi') || $has('no')) return trim(wf_scalar($cfg['noResponse'] ?? ''));
-    if ($has('resolved') || $has('ho gaya') || $has('done') || $has('yes')) return trim(wf_scalar($cfg['resolved'] ?? ''));
-    return trim(wf_scalar($cfg['fallback'] ?? ''));
-}
-
 /** Minimal HTTP client — curl when available, PHP streams otherwise. Returns [status, error, body]. */
 function wf_http(string $method, string $url, $body = null, array $headers = []): array {
     if (!preg_match('#^https?://#i', $url)) return [0, 'URL must start with http:// or https://', ''];
@@ -617,41 +593,6 @@ function wf_action(string $type, array $cfg, array &$ctx, array $wf, bool $dry):
                         ->execute(array_values($data));
                 }
                 return ['status' => 'ok', 'error' => $skipped ? 'Skipped columns not in this list: ' . implode(', ', $skipped) : '', 'detail' => [$table => $data]];
-            }
-
-            case 'waAutoReply': {
-                $text = trim(wf_scalar($ctx['wa']['text'] ?? ''));
-                if ($text === '') return ['status' => 'noop', 'error' => 'No incoming WhatsApp message to reply to'];
-                $reply = wf_resolve(wf_wa_reply_text($cfg, $text), $ctx);
-                if ($reply === '') return ['status' => 'error', 'error' => 'WhatsApp reply is empty'];
-                $to = trim(wf_resolve($cfg['to'] ?? '', $ctx));
-                if ($to === '') $to = wf_scalar($ctx['wa']['from'] ?? '');
-                $num = wf_wa_recipient($to);
-                if ($num === '') return ['status' => 'error', 'error' => 'No WhatsApp number to reply to'];
-                if (!$dry) {
-                    // wa.php's sender captures the message id; fall back to the plain sender.
-                    if (function_exists('wa_meta_send_text')) {
-                        [$err, $waId] = wa_meta_send_text($num, $reply);
-                    } else {
-                        $err = wf_whatsapp_send($num, $reply);
-                        $waId = '';
-                    }
-                    if ($err !== '') return ['status' => 'error', 'error' => $err];
-                    // Keep the in-CRM chat in sync — store the outbound reply.
-                    if (function_exists('wa_store_message')) {
-                        try {
-                            $threadId = str_starts_with($num, 'group:') ? $num : 'wa:' . $num;
-                            wa_thread_upsert($threadId);
-                            wa_store_message([
-                                'thread_id' => $threadId, 'wa_msg_id' => $waId, 'direction' => 'out',
-                                'body' => $reply, 'status' => 'sent', 'sent_at' => date('Y-m-d H:i:s'),
-                            ]);
-                        } catch (Throwable $e) {
-                            error_log('[psri-workflow] waAutoReply store: ' . $e->getMessage());
-                        }
-                    }
-                }
-                return ['status' => 'ok', 'detail' => 'whatsapp reply → ' . $num];
             }
 
             case 'notify': {

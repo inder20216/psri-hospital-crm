@@ -184,28 +184,6 @@ export const NODE_DEFS = {
         : `Webhook → ${cfg.url || '…'}`,
   ),
 
-  waAutoReply: def(
-    'waAutoReply', 'action', 'WhatsApp Auto Reply', '🤖', '#4338ca',
-    'Replies to an incoming WhatsApp message — answers a customer’s 1 / 2 / 3, or sends a follow-up through unchanged',
-    [
-      { key: 'to',         label: 'Reply to', type: 'text', placeholder: '{{wa.from}}', hint: 'Blank replies to the number that messaged the business.' },
-      { key: 'resolved',   label: 'Reply for “1” (resolved)',           type: 'textarea' },
-      { key: 'noResponse', label: 'Reply for “2” (no response)',        type: 'textarea' },
-      { key: 'partial',    label: 'Reply for “3” (partially resolved)', type: 'textarea' },
-      { key: 'fallback',   label: 'Reply for anything else',            type: 'textarea' },
-      { key: 'marker',     label: 'Send as-is when the message contains', type: 'text', placeholder: 'Complaint #', hint: 'A full follow-up message is passed through unchanged instead of being answered.' },
-    ],
-    {
-      to: '{{wa.from}}',
-      resolved: 'Thank you for confirming. We are marking your complaint as resolved.',
-      noResponse: 'Thank you for the update. We will follow up with the vendor again. We also be checking on your other unresolved complaints if there are any',
-      partial: 'Thank you for the update. We will continue working on your complaint. We also be checking on your other unresolved complaints if there are any',
-      fallback: 'Please reply with 1 (Resolved), 2 (No response), or 3 (Partially resolved).',
-      marker: 'Complaint #',
-    },
-    (cfg) => `Reply → ${cfg.to || '{{wa.from}}'}`,
-  ),
-
   createCase: def(
     'createCase', 'action', 'Create Case', '🗂️', '#4338ca',
     'Auto-opens a case linked to the new contact',
@@ -282,7 +260,7 @@ export const NODE_DEFS = {
 
 export const PALETTE_GROUPS = [
   { group: 'Trigger',   color: '#0d9488', items: [NODE_DEFS.contactCreated, NODE_DEFS.caseCreated, NODE_DEFS.waMessage, NODE_DEFS.waFollowup] },
-  { group: 'Actions',   color: '#4338ca', items: [NODE_DEFS.assign, NODE_DEFS.notify, NODE_DEFS.waAutoReply, NODE_DEFS.createCase, NODE_DEFS.updateContact, NODE_DEFS.sheetRow, NODE_DEFS.webhook] },
+  { group: 'Actions',   color: '#4338ca', items: [NODE_DEFS.assign, NODE_DEFS.notify, NODE_DEFS.createCase, NODE_DEFS.updateContact, NODE_DEFS.sheetRow, NODE_DEFS.webhook] },
   { group: 'Logic',     color: '#d97706', items: [NODE_DEFS.condition] },
 ];
 

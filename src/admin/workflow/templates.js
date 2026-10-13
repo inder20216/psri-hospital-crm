@@ -252,46 +252,14 @@ const CASE_WHATSAPP_TEMPLATE_CONFIG = {
   ],
 };
 
-// ── "VMM Followup" templates ──────────────────────────────────────────────────
+// ── "VMM Followup" template ───────────────────────────────────────────────────
 // Ported from the VMM Followup n8n workflow, WhatsApp side only (the Outlook
-// email branch is dropped). Two workflows, because a workflow runs on exactly
-// one trigger:
-//
-// 1. Auto reply — a customer answers a complaint follow-up. Their reply is
-//    passed through if it is a full follow-up message, otherwise answered:
-//       1 → resolved · 2 → no response · 3 → partially resolved · other → ask again
-//
-//      WhatsApp Message → Message received? ─(true)→ WhatsApp Auto Reply
-//
-// 2. Send follow-up — the complaint system pushes a follow-up out to a customer:
+// email branch is dropped). The complaint system pushes a follow-up out to a
+// customer:
 //
 //      Follow-up Request → Send follow-up (WhatsApp)
 
-export const VMM_FOLLOWUP_REPLY_TEMPLATE_KEY = 'vmm-followup-reply';
-export const VMM_FOLLOWUP_SEND_TEMPLATE_KEY  = 'vmm-followup-send';
-
-const VMM_FOLLOWUP_REPLY_TEMPLATE_CONFIG = {
-  v: 1,
-  nodes: [
-    tplNode('vmm-reply-trigger', 'trigger',   'waMessage', 240, 120, {}),
-    tplNode('vmm-reply-check',   'condition', 'condition', 480, 120, {
-      label: 'Message received?', field: 'wa.text', operator: 'notEmpty', value: '',
-    }),
-    tplNode('vmm-reply-auto',    'action',    'waAutoReply', 720, 120, {
-      label: 'Auto reply',
-      to: '{{wa.from}}',
-      resolved: 'Thank you for confirming. We are marking your complaint as resolved.',
-      noResponse: 'Thank you for the update. We will follow up with the vendor again. We also be checking on your other unresolved complaints if there are any',
-      partial: 'Thank you for the update. We will continue working on your complaint. We also be checking on your other unresolved complaints if there are any',
-      fallback: 'Please reply with 1 (Resolved), 2 (No response), or 3 (Partially resolved).',
-      marker: 'Complaint #',
-    }),
-  ],
-  edges: [
-    { id: 'vmm-r1', source: 'vmm-reply-trigger', target: 'vmm-reply-check', sourceHandle: null,     targetHandle: null },
-    { id: 'vmm-r2', source: 'vmm-reply-check',   target: 'vmm-reply-auto',  sourceHandle: 'true',   targetHandle: null },
-  ],
-};
+export const VMM_FOLLOWUP_SEND_TEMPLATE_KEY = 'vmm-followup-send';
 
 const VMM_FOLLOWUP_SEND_TEMPLATE_CONFIG = {
   v: 1,
@@ -310,10 +278,6 @@ const VMM_FOLLOWUP_SEND_TEMPLATE_CONFIG = {
 };
 
 // ── Builders ─────────────────────────────────────────────────────────────────
-
-export function buildVmmFollowupReplyTemplate() {
-  return fromConfig(JSON.parse(JSON.stringify(VMM_FOLLOWUP_REPLY_TEMPLATE_CONFIG)));
-}
 
 export function buildVmmFollowupSendTemplate() {
   return fromConfig(JSON.parse(JSON.stringify(VMM_FOLLOWUP_SEND_TEMPLATE_CONFIG)));

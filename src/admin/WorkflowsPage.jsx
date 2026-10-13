@@ -72,7 +72,6 @@ export default function WorkflowsPage() {
         <button onClick={() => navigate('/admin/workflows/new?template=new-contact')}>+ New Contact Workflow</button>
         <button onClick={() => navigate('/admin/workflows/new?template=new-case')}>+ New Case Workflow</button>
         <button onClick={() => navigate('/admin/workflows/new?template=case-whatsapp')}>+ Case WhatsApp Alerts</button>
-        <button onClick={() => navigate('/admin/workflows/new?template=vmm-followup-reply')}>+ VMM Followup — Auto Reply</button>
         <button onClick={() => navigate('/admin/workflows/new?template=vmm-followup-send')}>+ VMM Followup — Send Follow-up</button>
       </div>
 
