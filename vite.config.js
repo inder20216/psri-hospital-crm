@@ -14,6 +14,14 @@ export default defineConfig(({ command }) => ({
   // + BASE_URL) must match what's actually registered in Azure for
   // localhost, which is the plain root, not /psri-hospital-crm/.
   base: command === 'build' ? '/psri-hospital-crm/' : '/',
+  build: {
+    // Keep classic `(max-width: …)` media queries rather than letting the
+    // minifier rewrite them to the modern `(width <= …)` range form. The phone
+    // layout for the WhatsApp list is built from media queries, and older phone
+    // browsers silently drop range syntax — which would leave a phone showing
+    // the desktop layout.
+    cssTarget: ['chrome87', 'safari14', 'firefox78', 'edge88'],
+  },
   server: {
     proxy: {
       // Workflow automation PHP API — run it locally with:
