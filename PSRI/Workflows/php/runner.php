@@ -22,12 +22,17 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 
-const WF_TRIGGER_NODE = ['contact-created' => 'contactCreated', 'case-created' => 'caseCreated'];
+const WF_TRIGGER_NODE = [
+    'contact-created' => 'contactCreated',
+    'case-created'    => 'caseCreated',
+    'wa-message'      => 'waMessage',
+    'wa-followup'     => 'waFollowup',
+];
 
 const WF_LABELS = [
     'assign' => 'Assign contact', 'createCase' => 'Create case', 'updateContact' => 'Update contact',
     'sheetRow' => 'Append list row', 'webhook' => 'Call webhook', 'notify' => 'Send notification',
-    'condition' => 'Condition',
+    'waAutoReply' => 'WhatsApp reply', 'condition' => 'Condition',
 ];
 
 // Contact field key (schema.js CONTACT_FIELDS) → contacts column.
@@ -237,6 +242,7 @@ function wf_field_value(array $ctx, string $field): string {
     if ($field === 'case.procedureOrSpecialty') {
         return implode(' | ', array_map(fn ($k) => wf_scalar($ctx['case'][$k] ?? ''), ['typeOfProcedure', 'nameOfProcedure', 'specialtyEnquiredFor', 'typeOfEnquiry']));
     }
+    if (str_starts_with($field, 'wa.')) return wf_scalar($ctx['wa'][substr($field, 3)] ?? '');
     if (str_starts_with($field, 'case.')) return wf_scalar($ctx['case'][substr($field, 5)] ?? '');
     if (array_key_exists($field, $ctx['contact'])) return wf_scalar($ctx['contact'][$field]);
     if (array_key_exists($field, $ctx['case'])) return wf_scalar($ctx['case'][$field]);
@@ -457,6 +463,30 @@ function wf_wa_recipient(string $s): string {
     return wf_wa_number($s);
 }
 
+/**
+ * Reply text for an incoming WhatsApp message (the VMM Followup rules): a full
+ * follow-up message is sent back unchanged, otherwise "1" → resolved,
+ * "2" → no response, "3" → partially resolved, anything else → the fallback.
+ */
+function wf_wa_reply_text(array $cfg, string $text): string {
+    $text = trim($text);
+    if ($text === '') return '';
+    $word = wf_lower($text);
+    $marker = wf_lower(trim(wf_scalar($cfg['marker'] ?? '')));
+    if ($marker !== '' && str_contains($word, $marker)) return $text;
+    $word = trim((string) preg_replace('/\s+/', ' ', $word));
+    foreach (['1' => 'resolved', '2' => 'noResponse', '3' => 'partial'] as $digit => $key) {
+        if ($word === (string) $digit) return trim(wf_scalar($cfg[$key] ?? ''));
+    }
+    // Word-boundary match so "no" only matches a standalone "no".
+    $has = fn (string $needle): bool => $needle !== ''
+        && preg_match('/(?<![a-z0-9])' . preg_quote($needle, '/') . '(?![a-z0-9])/u', $word) === 1;
+    if ($has('partial') || $has('partially') || $has('still pending') || $has('thoda hua')) return trim(wf_scalar($cfg['partial'] ?? ''));
+    if ($has('no response') || $has('koi response nahi') || $has('nahi') || $has('no')) return trim(wf_scalar($cfg['noResponse'] ?? ''));
+    if ($has('resolved') || $has('ho gaya') || $has('done') || $has('yes')) return trim(wf_scalar($cfg['resolved'] ?? ''));
+    return trim(wf_scalar($cfg['fallback'] ?? ''));
+}
+
 /** Minimal HTTP client — curl when available, PHP streams otherwise. Returns [status, error, body]. */
 function wf_http(string $method, string $url, $body = null, array $headers = []): array {
     if (!preg_match('#^https?://#i', $url)) return [0, 'URL must start with http:// or https://', ''];
@@ -587,6 +617,41 @@ function wf_action(string $type, array $cfg, array &$ctx, array $wf, bool $dry):
                         ->execute(array_values($data));
                 }
                 return ['status' => 'ok', 'error' => $skipped ? 'Skipped columns not in this list: ' . implode(', ', $skipped) : '', 'detail' => [$table => $data]];
+            }
+
+            case 'waAutoReply': {
+                $text = trim(wf_scalar($ctx['wa']['text'] ?? ''));
+                if ($text === '') return ['status' => 'noop', 'error' => 'No incoming WhatsApp message to reply to'];
+                $reply = wf_resolve(wf_wa_reply_text($cfg, $text), $ctx);
+                if ($reply === '') return ['status' => 'error', 'error' => 'WhatsApp reply is empty'];
+                $to = trim(wf_resolve($cfg['to'] ?? '', $ctx));
+                if ($to === '') $to = wf_scalar($ctx['wa']['from'] ?? '');
+                $num = wf_wa_recipient($to);
+                if ($num === '') return ['status' => 'error', 'error' => 'No WhatsApp number to reply to'];
+                if (!$dry) {
+                    // wa.php's sender captures the message id; fall back to the plain sender.
+                    if (function_exists('wa_meta_send_text')) {
+                        [$err, $waId] = wa_meta_send_text($num, $reply);
+                    } else {
+                        $err = wf_whatsapp_send($num, $reply);
+                        $waId = '';
+                    }
+                    if ($err !== '') return ['status' => 'error', 'error' => $err];
+                    // Keep the in-CRM chat in sync — store the outbound reply.
+                    if (function_exists('wa_store_message')) {
+                        try {
+                            $threadId = str_starts_with($num, 'group:') ? $num : 'wa:' . $num;
+                            wa_thread_upsert($threadId);
+                            wa_store_message([
+                                'thread_id' => $threadId, 'wa_msg_id' => $waId, 'direction' => 'out',
+                                'body' => $reply, 'status' => 'sent', 'sent_at' => date('Y-m-d H:i:s'),
+                            ]);
+                        } catch (Throwable $e) {
+                            error_log('[psri-workflow] waAutoReply store: ' . $e->getMessage());
+                        }
+                    }
+                }
+                return ['status' => 'ok', 'detail' => 'whatsapp reply → ' . $num];
             }
 
             case 'notify': {
@@ -738,6 +803,8 @@ function wf_log(array $wf, string $triggerKey, array $ctx, string $caseId, array
  * $opts:
  *   graph  — run this inline graph instead of the saved workflows (designer test / CLI)
  *   dryRun — walk + evaluate, but write/send nothing and log nothing
+ *   wa     — the incoming WhatsApp message for the wa-message / wa-followup triggers
+ *            (text, from, senderName, threadId, …), read via {{wa.*}}
  *
  * A saved workflow runs at most once per contact (contact-created) or per
  * case (case-created), so a retried or duplicated trigger call is harmless.
@@ -747,8 +814,12 @@ function wf_fire(string $triggerKey, array $contact, array $case = [], array $op
     $dry = !empty($opts['dryRun']);
     $inline = isset($opts['graph']);
     $ctx = ['contact' => $contact, 'case' => $case];
+    if (is_array($opts['wa'] ?? null)) $ctx['wa'] = $opts['wa'];
     $caseId = wf_scalar($case['caseId'] ?? $case['id'] ?? '');
-    $recordId = $triggerKey === 'case-created' ? $caseId : wf_scalar($contact['id'] ?? '');
+    // WhatsApp triggers carry a message, not a record: every message runs the
+    // workflow (wa.php only fires after a message is newly stored).
+    $waTrigger = $triggerKey === 'wa-message' || $triggerKey === 'wa-followup';
+    $recordId = $waTrigger ? '' : ($triggerKey === 'case-created' ? $caseId : wf_scalar($contact['id'] ?? ''));
 
     if ($inline) {
         $workflows = [['id' => 'test', 'name' => 'Test run', 'config' => $opts['graph']]];

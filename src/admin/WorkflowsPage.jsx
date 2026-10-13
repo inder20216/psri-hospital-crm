@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import './Admin.css';
 import './Workflow.css';
 
-const TRIGGER = { 'contact-created': 'Contact Created', 'case-created': 'Case Created' };
+const TRIGGER = { 'contact-created': 'Contact Created', 'case-created': 'Case Created', 'wa-message': 'WhatsApp Message', 'wa-followup': 'Follow-up Request' };
 
 export default function WorkflowsPage() {
   const { currentUser } = useAuth();
@@ -63,7 +63,7 @@ export default function WorkflowsPage() {
       <div className="admin-top">
         <div>
           <h1 className="admin-title">Workflows</h1>
-          <p className="admin-subtitle">Automations that run when a new contact or a new case is created — designed on the canvas, executed by the automation runner.</p>
+          <p className="admin-subtitle">Automations that run on a new contact, a new case, or an incoming WhatsApp message — designed on the canvas, executed by the automation runner.</p>
         </div>
         <button className="admin-btn-primary" onClick={() => navigate('/admin/workflows/new')}>+ New Workflow</button>
       </div>
@@ -72,6 +72,8 @@ export default function WorkflowsPage() {
         <button onClick={() => navigate('/admin/workflows/new?template=new-contact')}>+ New Contact Workflow</button>
         <button onClick={() => navigate('/admin/workflows/new?template=new-case')}>+ New Case Workflow</button>
         <button onClick={() => navigate('/admin/workflows/new?template=case-whatsapp')}>+ Case WhatsApp Alerts</button>
+        <button onClick={() => navigate('/admin/workflows/new?template=vmm-followup-reply')}>+ VMM Followup — Auto Reply</button>
+        <button onClick={() => navigate('/admin/workflows/new?template=vmm-followup-send')}>+ VMM Followup — Send Follow-up</button>
       </div>
 
       {error && <div className="admin-err-banner">{error}</div>}
@@ -82,7 +84,7 @@ export default function WorkflowsPage() {
         {!loading && workflows.length === 0 && (
           <div className="wf-empty">
             <div className="wf-empty-icon">🔀</div>
-            <p>No workflows yet. Create one to automate what happens when a new contact or a new case is added.</p>
+            <p>No workflows yet. Create one to automate what happens when a new contact or case is added, or a WhatsApp message arrives.</p>
           </div>
         )}
         {!loading && workflows.length > 0 && (

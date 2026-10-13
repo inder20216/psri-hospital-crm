@@ -59,7 +59,18 @@ export const CASE_FIELDS = [
   { key: 'case.procedureOrSpecialty', label: 'Case · Procedure / Specialty / Enquiry (any)' },
 ];
 
-export const CONDITION_FIELDS = [...CONTACT_FIELDS, ...CASE_FIELDS];
+// Fields a condition can read from the message that fired a WhatsApp
+// workflow (WhatsApp Message / Follow-up Request). The "wa." prefix tells the
+// runner to read the incoming message, not the contact or the case.
+export const WA_FIELDS = [
+  { key: 'wa.text',         label: 'WhatsApp · Message text' },
+  { key: 'wa.from',         label: 'WhatsApp · From number' },
+  { key: 'wa.senderName',   label: 'WhatsApp · Sender name' },
+  { key: 'wa.threadId',     label: 'WhatsApp · Conversation' },
+  { key: 'wa.complaint_id', label: 'WhatsApp · Complaint ID' },
+];
+
+export const CONDITION_FIELDS = [...CONTACT_FIELDS, ...CASE_FIELDS, ...WA_FIELDS];
 
 export const OPERATORS = [
   { value: 'eq',          label: 'equals' },
@@ -76,6 +87,8 @@ export const OPERATOR_NEEDS_VALUE = op => op !== 'empty' && op !== 'notEmpty';
 export const TRIGGER_TRANSLATIONS = {
   'contact-created': { label: 'Contact Created', description: 'A new contact is added to the CRM' },
   'case-created':    { label: 'Case Created',    description: 'A new case (enquiry / appointment) is opened for a contact' },
+  'wa-message':      { label: 'WhatsApp Message',  description: 'A customer sends a message on WhatsApp' },
+  'wa-followup':     { label: 'Follow-up Request', description: 'A follow-up message is pushed in for a customer' },
 };
 
 // Maps a trigger node's actionType to the trigger key recorded on the workflow
@@ -84,6 +97,8 @@ export function triggerKeyFor(actionType) {
   return {
     contactCreated: 'contact-created',
     caseCreated:    'case-created',
+    waMessage:      'wa-message',
+    waFollowup:     'wa-followup',
   }[actionType] || 'contact-created';
 }
 
@@ -107,6 +122,22 @@ export const NODE_DEFS = {
     [],
     {},
     () => 'Fires when a new case is opened',
+  ),
+
+  waMessage: def(
+    'waMessage', 'trigger', 'WhatsApp Message', '💬', '#16a34a',
+    'Fires when a customer sends a message on WhatsApp',
+    [],
+    {},
+    () => 'Fires when a customer replies on WhatsApp',
+  ),
+
+  waFollowup: def(
+    'waFollowup', 'trigger', 'Follow-up Request', '📤', '#16a34a',
+    'Fires when a follow-up message is pushed in for a customer, e.g. from the complaint system',
+    [],
+    {},
+    () => 'Fires when a follow-up is sent for a customer',
   ),
 
   assign: def(
@@ -151,6 +182,28 @@ export const NODE_DEFS = {
       : cfg.channel === 'WhatsApp'
         ? `WhatsApp → ${cfg.phones || '…'}${(cfg.waTemplate || '').trim() ? ` · ${cfg.waTemplate.trim()}` : ''}`
         : `Webhook → ${cfg.url || '…'}`,
+  ),
+
+  waAutoReply: def(
+    'waAutoReply', 'action', 'WhatsApp Auto Reply', '🤖', '#4338ca',
+    'Replies to an incoming WhatsApp message — answers a customer’s 1 / 2 / 3, or sends a follow-up through unchanged',
+    [
+      { key: 'to',         label: 'Reply to', type: 'text', placeholder: '{{wa.from}}', hint: 'Blank replies to the number that messaged the business.' },
+      { key: 'resolved',   label: 'Reply for “1” (resolved)',           type: 'textarea' },
+      { key: 'noResponse', label: 'Reply for “2” (no response)',        type: 'textarea' },
+      { key: 'partial',    label: 'Reply for “3” (partially resolved)', type: 'textarea' },
+      { key: 'fallback',   label: 'Reply for anything else',            type: 'textarea' },
+      { key: 'marker',     label: 'Send as-is when the message contains', type: 'text', placeholder: 'Complaint #', hint: 'A full follow-up message is passed through unchanged instead of being answered.' },
+    ],
+    {
+      to: '{{wa.from}}',
+      resolved: 'Thank you for confirming. We are marking your complaint as resolved.',
+      noResponse: 'Thank you for the update. We will follow up with the vendor again. We also be checking on your other unresolved complaints if there are any',
+      partial: 'Thank you for the update. We will continue working on your complaint. We also be checking on your other unresolved complaints if there are any',
+      fallback: 'Please reply with 1 (Resolved), 2 (No response), or 3 (Partially resolved).',
+      marker: 'Complaint #',
+    },
+    (cfg) => `Reply → ${cfg.to || '{{wa.from}}'}`,
   ),
 
   createCase: def(
@@ -228,8 +281,8 @@ export const NODE_DEFS = {
 };
 
 export const PALETTE_GROUPS = [
-  { group: 'Trigger',   color: '#0d9488', items: [NODE_DEFS.contactCreated, NODE_DEFS.caseCreated] },
-  { group: 'Actions',   color: '#4338ca', items: [NODE_DEFS.assign, NODE_DEFS.notify, NODE_DEFS.createCase, NODE_DEFS.updateContact, NODE_DEFS.sheetRow, NODE_DEFS.webhook] },
+  { group: 'Trigger',   color: '#0d9488', items: [NODE_DEFS.contactCreated, NODE_DEFS.caseCreated, NODE_DEFS.waMessage, NODE_DEFS.waFollowup] },
+  { group: 'Actions',   color: '#4338ca', items: [NODE_DEFS.assign, NODE_DEFS.notify, NODE_DEFS.waAutoReply, NODE_DEFS.createCase, NODE_DEFS.updateContact, NODE_DEFS.sheetRow, NODE_DEFS.webhook] },
   { group: 'Logic',     color: '#d97706', items: [NODE_DEFS.condition] },
 ];
 
@@ -351,7 +404,7 @@ export function validateGraph(nodes, edges) {
   const triggers = nodes.filter(isTriggerLike);
   const nonTriggers = nodes.filter(n => !isTriggerLike(n));
 
-  if (triggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add a trigger node (“Contact Created” or “Case Created”) to start the workflow.' });
+  if (triggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add a trigger node (“Contact Created”, “Case Created”, “WhatsApp Message” or “Follow-up Request”) to start the workflow.' });
   if (triggers.length > 1) issues.push({ severity: 'error', nodeId: null, message: 'Only one trigger node is allowed per workflow.' });
   if (nonTriggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add at least one action node.' });
 

@@ -46,6 +46,11 @@ return [
         'api_version'     => $env('PSRI_WA_API_VERSION', 'v25.0'),
         'url'             => $env('PSRI_WA_URL', ''),
         'body'            => $env('PSRI_WA_BODY', '{"to":"{{to}}","message":"{{message}}"}'),
+        // In-CRM chat (wa.php): the Meta webhook at <api>/psri-wa-webhook needs a
+        // verify token (any secret string, typed again in the Meta app) and the
+        // app secret, used to check each webhook's X-Hub-Signature-256.
+        'verify_token'    => $env('PSRI_WA_VERIFY_TOKEN', ''),
+        'app_secret'      => $env('PSRI_WA_APP_SECRET', ''),
     ],
     // Origin allowed to call the API from the browser ('*' = any). Set this
     // to the CRM's origin in production, e.g. https://crm.example.com

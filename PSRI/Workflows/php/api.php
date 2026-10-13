@@ -23,13 +23,22 @@
  *   GET  psri-picklist-suggestions?status= → { success, suggestions:[…] } (status: pending|approved|rejected, blank=all)
  *   POST psri-picklist-suggestion-review {id,approved,reviewerId,reviewerName} → { success, id, message, warning? }
  *
+ *   WhatsApp chat (Cloud API) — see wa.php:
+ *   GET  psri-wa-threads?limit=          → { success, threads:[…] }
+ *   GET  psri-wa-thread?id=&title=&limit= → { success, thread, messages:[…] } (creates the thread if new)
+ *   POST psri-wa-send {threadId,message}  → { success, message }   (threadId: "group:<id>" | "wa:<phone>")
+ *   GET  psri-wa-groups                   → { success, groups:[…] } (Meta Groups API)
+ *   POST psri-wa-followup {mobile,message,…} → fires "Follow-up Request" workflows
+ *   GET  psri-wa-webhook                  → Meta verification handshake (raw)
+ *   POST psri-wa-webhook                  → inbound messages + statuses (raw); fires "WhatsApp Message" workflows
+ *
  *   GET  psri-workflow-get                    → { success, workflows:[…] }
  *   POST psri-workflow-save        {id?,name,trigger,status,config,updatedBy}
  *                                             → { success, workflow:{id,name,status} }
  *   GET  psri-workflow-runs?id=&limit=        → { success, runs:[…] }
  *   POST psri-contact-workflow-run {contact:{id,…}}        → { success, ran:[…] }
  *   POST psri-case-workflow-run    {case:{id,contactId,…}} → { success, ran:[…] }
- *   POST psri-workflow-test        {graph, trigger?, contact?, case?}
+ *   POST psri-workflow-test        {graph, trigger?, contact?, case?, wa?}
  *                                             → dry run: walks + evaluates, writes nothing
  *
  * CLI:
@@ -46,11 +55,12 @@ require_once __DIR__ . '/cases.php';
 require_once __DIR__ . '/reports.php';
 require_once __DIR__ . '/prospects.php';
 require_once __DIR__ . '/picklist_suggestions.php';
+require_once __DIR__ . '/wa.php';
 
 if (PHP_SAPI === 'cli') {
     $cmd = $argv[1] ?? '';
     if ($cmd === 'migrate') {
-        echo json_encode(['tables' => psri_migrate()], JSON_PRETTY_PRINT) . "\n";
+        echo json_encode(['tables' => array_values(array_unique(array_merge(psri_migrate(), wa_ensure_tables())))], JSON_PRETTY_PRINT) . "\n";
     } elseif ($cmd === 'test' && is_file($argv[2] ?? '')) {
         $graph = json_decode((string) file_get_contents($argv[2]), true);
         $payload = is_file($argv[3] ?? '') ? json_decode((string) file_get_contents($argv[3]), true) : [];
@@ -91,6 +101,14 @@ if (PHP_SAPI === 'cli') {
         exit(2);
     }
     exit(0);
+}
+
+// ── Meta WhatsApp webhook ─────────────────────────────────────────────────
+// Handled before the JSON/CORS wrapper: Meta needs a raw challenge on GET and
+// a plain "ok" on POST, and it only ever calls this one URL.
+if (basename((string) parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH)) === 'psri-wa-webhook') {
+    if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'GET') wa_webhook_verify();
+    wa_webhook_receive();
 }
 
 function api_out(array $data, int $code = 200): void {
@@ -241,7 +259,46 @@ try {
             if (!$graph || !is_array($graph['nodes'] ?? null)) api_out(['success' => false, 'error' => 'graph is required'], 400);
             $trigger = isset(WF_TRIGGER_NODE[$body['trigger'] ?? '']) ? $body['trigger'] : api_trigger_of($graph);
             [$contact, $case] = api_context($trigger, is_array($body['contact'] ?? null) ? $body['contact'] : [], is_array($body['case'] ?? null) ? $body['case'] : []);
-            api_out(['success' => true] + wf_fire($trigger, $contact, $case, ['graph' => $graph, 'dryRun' => true]));
+            $opts = ['graph' => $graph, 'dryRun' => true];
+            if (is_array($body['wa'] ?? null)) $opts['wa'] = $body['wa'];
+            api_out(['success' => true] + wf_fire($trigger, $contact, $case, $opts));
+
+        case 'psri-wa-threads':
+            api_out(['success' => true, 'threads' => wa_threads_list((int) ($_GET['limit'] ?? 50))]);
+
+        case 'psri-wa-thread': {
+            $id = trim((string) ($_GET['id'] ?? ''));
+            if ($id === '') api_out(['success' => false, 'error' => 'id is required'], 400);
+            $thread = wa_thread_row($id) ?: wa_thread_upsert($id, trim((string) ($_GET['title'] ?? '')), trim((string) ($_GET['caseId'] ?? '')));
+            if (!$thread) api_out(['success' => false, 'error' => 'Unknown conversation'], 400);
+            wa_mark_read($id);
+            api_out([
+                'success'  => true,
+                'thread'   => wa_thread_api($thread),
+                'messages' => wa_thread_messages($id, (int) ($_GET['limit'] ?? 100), (int) ($_GET['before'] ?? 0)),
+            ]);
+        }
+
+        case 'psri-wa-send':
+            $res = wa_send($body);
+            if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
+
+        case 'psri-wa-groups':
+            api_out(['success' => true, 'groups' => wa_groups()]);
+
+        case 'psri-wa-followup': {
+            // Fires the "Follow-up Request" workflows — the complaint system
+            // pushes a follow-up out to a customer. The whole body is available
+            // to the graph as {{wa.*}} (plus mobile/message normalised to from/text).
+            $from = trim((string) ($body['from'] ?? $body['mobile'] ?? ''));
+            $text = trim((string) ($body['text'] ?? $body['message'] ?? ''));
+            if ($from === '' || $text === '') api_out(['success' => false, 'error' => 'mobile and message are required'], 400);
+            $wa = $body;
+            $wa['from'] = $from;
+            $wa['text'] = $text;
+            api_out(['success' => true] + wf_fire('wa-followup', wa_contact_for_phone($from) ?: [], [], ['wa' => $wa]));
+        }
 
         default:
             api_out(['success' => false, 'error' => 'Not found'], 404);

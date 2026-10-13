@@ -3,35 +3,45 @@ import { usePicklists } from '../../context/PicklistsContext';
 import {
   resolveWhatsAppGroups,
   groupInviteLink,
+  groupApiTarget,
   buildGroupMessage,
 } from './whatsappGroups';
+import WaChatPanel from './WaChatPanel';
 
-// Department WhatsApp groups for a case, opened as a floating panel inside the
-// CRM window (no new tab). The panel is draggable by its header.
+// Department WhatsApp groups for a case.
 //
-// Note: WhatsApp blocks embedding (X-Frame-Options: DENY), so the chat itself
-// cannot render inside the CRM. The panel shows the group, the ready-to-send
-// message (Copy) and a one-click "Open in WhatsApp" that stays in this window.
+// If a desk is mapped to a WhatsApp Cloud API target (a Groups-API group id or a
+// phone number), "Open chat" shows the real conversation in a floating panel
+// inside the CRM — no new tab, no iframe. Otherwise it falls back to the group
+// invite link: WhatsApp blocks being framed (X-Frame-Options: DENY), so that
+// path keeps the copy-message + same-window open panel.
 export default function WhatsAppGroupWidget({ form }) {
   const { getList } = usePicklists();
   const [copiedId, setCopiedId] = useState('');
   const [floatingId, setFloatingId] = useState('');
+  const [chatId, setChatId] = useState('');
   const [pos, setPos] = useState(null);
   const drag = useRef(null);
   const panelRef = useRef(null);
 
   const groups = useMemo(() => resolveWhatsAppGroups(form), [form]);
   const resolved = useMemo(
-    () => groups.map(g => ({ ...g, url: groupInviteLink(g.id, getList, g.kind) })),
+    () => groups.map(g => ({
+      ...g,
+      url: groupInviteLink(g.id, getList, g.kind),
+      apiTarget: groupApiTarget(g.id, getList),
+    })),
     [groups, getList],
   );
 
   const floating = resolved.find(g => g.id === floatingId) || null;
+  const chatGroup = resolved.find(g => g.apiTarget === chatId) || null;
 
-  // Close the panel if the case stops routing to that group.
+  // Close a panel if the case stops routing to that group.
   useEffect(() => {
     if (floatingId && !resolved.some(g => g.id === floatingId)) setFloatingId('');
-  }, [resolved, floatingId]);
+    if (chatId && !resolved.some(g => g.apiTarget === chatId)) setChatId('');
+  }, [resolved, floatingId, chatId]);
 
   const copyText = useCallback(async (text) => {
     try {
@@ -56,10 +66,17 @@ export default function WhatsAppGroupWidget({ form }) {
     if (!group.url) return;
     // Anchor bottom-right of the viewport the first time it opens.
     setPos(prev => prev || {
-      left: Math.max(12, window.innerWidth - 384),
-      top: Math.max(12, window.innerHeight - 424),
+      left: Math.max(12, window.innerWidth - 412),
+      top: Math.max(12, window.innerHeight - 552),
     });
     setFloatingId(group.id);
+  };
+
+  // Opens the real WhatsApp conversation (Cloud API) inside the CRM.
+  const openChat = (group) => {
+    if (!group.apiTarget) return;
+    setFloatingId('');
+    setChatId(group.apiTarget);
   };
 
   // ── Drag the floating panel by its header ──────────────────────────────────
@@ -118,7 +135,11 @@ export default function WhatsAppGroupWidget({ form }) {
                   <span className="psri-wa-group-reason">{g.reason}</span>
                 </div>
                 <div className="psri-wa-group-actions">
-                  {g.url ? (
+                  {g.apiTarget ? (
+                    <button type="button" className="psri-btn-primary psri-wa-open-btn" onClick={() => openChat(g)}>
+                      Open chat →
+                    </button>
+                  ) : g.url ? (
                     <button type="button" className="psri-btn-primary psri-wa-open-btn" onClick={() => openGroup(g)}>
                       Open group →
                     </button>
@@ -140,7 +161,7 @@ export default function WhatsAppGroupWidget({ form }) {
       {floating && (
         <div
           ref={panelRef}
-          className="wa-float"
+          className="wa-float wa-float--frame"
           style={pos ? { left: pos.left, top: pos.top } : undefined}
           role="dialog"
           aria-label={`WhatsApp group ${floating.label}`}
@@ -150,15 +171,18 @@ export default function WhatsAppGroupWidget({ form }) {
             <span className="wa-float-title">{floating.label}</span>
             <button type="button" className="wa-float-close" onClick={() => setFloatingId('')} aria-label="Close">✕</button>
           </div>
-          <div className="wa-float-body">
-            <div className="wa-float-reason">{floating.reason}</div>
-            <textarea className="wa-float-msg" readOnly value={buildGroupMessage(form, floating)} />
-            <p className="wa-float-note">
-              WhatsApp doesn’t allow its chat to be shown inside another site, so this panel keeps
-              you in the CRM — copy the update, then open the group when you’re ready.
-            </p>
-          </div>
+          <div className="wa-float-reason">{floating.reason}</div>
+          <iframe
+            key={floating.id}
+            className="wa-float-frame"
+            src={floating.url}
+            title={`WhatsApp group ${floating.label}`}
+            referrerPolicy="no-referrer"
+          />
           <div className="wa-float-actions">
+            <span className="wa-float-hint">
+              Panel blank? WhatsApp blocks being framed, so open it here instead.
+            </span>
             <button type="button" className="psri-btn-ghost" onClick={() => copyUpdate(floating)}>
               {copiedId === floating.id ? 'Copied ✓' : 'Copy message'}
             </button>
@@ -167,6 +191,14 @@ export default function WhatsAppGroupWidget({ form }) {
             </button>
           </div>
         </div>
+      )}
+
+      {chatGroup && (
+        <WaChatPanel
+          threadId={chatGroup.apiTarget}
+          title={chatGroup.label}
+          onClose={() => setChatId('')}
+        />
       )}
     </>
   );

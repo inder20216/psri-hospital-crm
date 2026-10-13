@@ -154,4 +154,13 @@ export const psri = {
     .then(d => (d && d.success ? d.cases : []))
     .catch(err => { console.warn('[appreciation] getAppreciationList failed:', err.message); return []; }),
   reviewAppreciation: (data) => post('psri-appreciation-review', data, WF_BASE),
+
+  // WhatsApp chat (Cloud API) — department conversations shown inside the CRM
+  // (see PSRI/Workflows/php/wa.php). Reads never throw; the panel renders its
+  // own empty/error state. Sending throws so the composer can show the failure.
+  getWaThreads: (limit) => get('psri-wa-threads', { limit }, WF_BASE)
+    .then(d => (d && d.success ? d.threads : []))
+    .catch(err => { console.warn('[whatsapp] getWaThreads failed:', err.message); return []; }),
+  getWaThread: (id, title, caseId) => get('psri-wa-thread', { id, title, caseId }, WF_BASE),
+  sendWaMessage: (data) => post('psri-wa-send', data, WF_BASE),
 };
