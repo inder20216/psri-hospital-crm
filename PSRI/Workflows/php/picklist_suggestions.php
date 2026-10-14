@@ -81,9 +81,9 @@ function ps_suggest(array $b): array {
     }
 
     $ins = $pdo->prepare(
-        "INSERT INTO picklist_suggestions (list_name, value, suggested_by, suggested_by_name) VALUES (?, ?, ?, ?)"
+        "INSERT INTO picklist_suggestions (list_name, value, suggested_by, suggested_by_name, case_context) VALUES (?, ?, ?, ?, ?)"
     );
-    $ins->execute([$listName, $value, (string) ($b['agentId'] ?? ''), (string) ($b['agentName'] ?? '')]);
+    $ins->execute([$listName, $value, (string) ($b['agentId'] ?? ''), (string) ($b['agentName'] ?? ''), trim((string) ($b['caseContext'] ?? ''))]);
 
     return ['id' => (int) $pdo->lastInsertId(), 'message' => 'Suggested — pending approval'];
 }
@@ -103,6 +103,7 @@ function ps_list(string $status): array {
         'value'            => $r['value'],
         'suggestedBy'      => $r['suggested_by'],
         'suggestedByName'  => $r['suggested_by_name'],
+        'caseContext'      => $r['case_context'] ?? '',
         'status'           => $r['status'],
         'reviewedBy'       => $r['reviewed_by'],
         'reviewedByName'   => $r['reviewed_by_name'],
