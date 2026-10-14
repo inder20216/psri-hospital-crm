@@ -268,6 +268,113 @@ function wf_digits(string $s): string {
     return (string) preg_replace('/\D/', '', $s);
 }
 
+/**
+ * The person's mobile as a comparable key: digits only, then the last 10.
+ * Rows are saved with or without the country code (+91 8448089345 and
+ * 8448089345 are the same person), so comparing every digit would split one
+ * person's calls across several groups. Mirrors mobileKey() in
+ * src/projects/psri/repeatCalls.js.
+ */
+function wf_mobile_key(string $s): string {
+    $d = wf_digits($s);
+    return strlen($d) >= 10 ? substr($d, -10) : $d;
+}
+
+/**
+ * Normalised concern text for repeat matching — lower case, punctuation turned
+ * into spaces, whitespace collapsed. Mirrors normalizeConcern() in
+ * src/projects/psri/repeatCalls.js so the WhatsApp list and the workflow runner
+ * agree on what counts as "the same query".
+ */
+function wf_norm_concern(string $s): string {
+    $s = mb_strtolower(trim($s), 'UTF-8');
+    $s = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $s);
+    return trim(preg_replace('/\s+/', ' ', (string) $s));
+}
+
+/**
+ * Repeat detection for a case: has this same person already raised this same
+ * concern, under this same Call For, on an earlier case?
+ *
+ * The same rule as the "Repeated query" tab in the WhatsApp list: same mobile +
+ * same Call For + same concern. Candidates are read from the database rather
+ * than from the request payload, so what the workflow branches on is what was
+ * actually saved.
+ *
+ * Returns context fields the designer can read and conditions can test:
+ *   isRepeat, repeatCount, repeatOrdinal, repeatFirstDate, repeatCaseIds
+ * With nothing to match on (no mobile, no summary) everything is falsy and a
+ * "Repeat query?" condition simply does not fire.
+ */
+function wf_repeat_info(PDO $pdo, string $caseId): array {
+    $out = ['isRepeat' => 'false', 'repeatCount' => '0', 'repeatOrdinal' => '0', 'repeatFirstDate' => '', 'repeatCaseIds' => ''];
+
+    $st = $pdo->prepare('SELECT case_id, contact_mobile, call_for, summary, created FROM cases WHERE case_id = ?');
+    $st->execute([$caseId]);
+    $self = $st->fetch();
+    if (!$self) return $out;
+
+    $mobile = wf_mobile_key((string) $self['contact_mobile']);
+    $summary = wf_norm_concern((string) $self['summary']);
+    if ($mobile === '' || $summary === '') return $out; // nothing to match on
+    $callFor = wf_norm_concern((string) $self['call_for']);
+
+    // Rows are saved with or without the country code, so match on the last 10
+    // digits (the national number) rather than an exact string.
+    $st = $pdo->prepare('SELECT case_id, contact_mobile, summary, call_for, created FROM cases WHERE contact_mobile LIKE ? ORDER BY created, case_id');
+    $st->execute(['%' . $mobile]);
+    $matches = [];
+    foreach ($st->fetchAll() as $r) {
+        if (wf_mobile_key((string) $r['contact_mobile']) !== $mobile) continue;
+        if (wf_norm_concern((string) $r['summary']) !== $summary) continue;
+        if (wf_norm_concern((string) $r['call_for']) !== $callFor) continue;
+        $matches[] = $r;
+    }
+
+    $total = count($matches);
+    $ordinal = 0;
+    foreach ($matches as $i => $r) {
+        if ((string) $r['case_id'] === $caseId) { $ordinal = $i + 1; break; }
+    }
+    if ($total === 0) return $out; // defensive: the case itself always matches
+
+    return [
+        'isRepeat'        => $total >= 2 ? 'true' : 'false',
+        'repeatCount'     => (string) $total,
+        'repeatOrdinal'   => (string) $ordinal,
+        'repeatFirstDate' => (string) ($matches[0]['created'] ?? ''),
+        'repeatCaseIds'   => implode(', ', array_map(fn ($r) => (string) $r['case_id'], $matches)),
+    ];
+}
+
+/**
+ * Builds a Microsoft Teams message that renders as an Adaptive Card on the
+ * Power Automate / Workflows webhook, and degrades to a plain text line on the
+ * older Incoming Webhook connector — which only reads `text`. One payload, so
+ * the workflow works with whichever URL the tenant handed out.
+ */
+function wf_teams_payload(string $text, string $title, string $factsTitle, array $facts): array {
+    $card = [
+        'type' => 'AdaptiveCard',
+        '$schema' => 'https://adaptivecards.io/schemas/adaptive-card.json',
+        'version' => '1.4',
+        'body' => array_values(array_filter([
+            ['type' => 'TextBlock', 'size' => 'Medium', 'weight' => 'Bolder', 'color' => 'Attention', 'text' => $title, 'wrap' => true],
+            $facts ? ['type' => 'TextBlock', 'spacing' => 'None', 'size' => 'Small', 'weight' => 'Bolder', 'text' => $factsTitle, 'wrap' => true] : null,
+            $facts ? ['type' => 'FactSet', 'facts' => $facts] : null,
+        ])),
+    ];
+    return [
+        'text' => $text,
+        'type' => 'message',
+        'attachments' => [[
+            'contentType' => 'application/vnd.microsoft.card.adaptive',
+            'contentUrl' => null,
+            'content' => $card,
+        ]],
+    ];
+}
+
 /** Maps a contacts row to the camelCase shape the CRM uses. */
 function wf_contact_from_row(array $r): array {
     $out = ['id' => $r['contact_id']];
@@ -644,6 +751,43 @@ function wf_action(string $type, array $cfg, array &$ctx, array $wf, bool $dry):
                     $via = $tpl['name'] !== '' ? " (template {$tpl['name']})" : '';
                     return ['status' => 'ok', 'detail' => 'whatsapp → ' . implode(', ', array_unique($nums)) . $via];
                 }
+                if (($cfg['channel'] ?? '') === 'Teams') {
+                    // Teams webhook (Power Automate "When a Teams webhook request
+                    // is received", or the older Incoming Webhook connector).
+                    // Server-side only: Teams sends no CORS headers, so this
+                    // cannot be done from the browser.
+                    $url = trim(wf_resolve($cfg['teamsUrl'] ?? ($cfg['url'] ?? ''), $ctx));
+                    if ($url === '') return ['status' => 'error', 'error' => 'Teams webhook URL is empty'];
+                    $title = trim(wf_resolve($cfg['title'] ?? '', $ctx));
+                    if ($title === '') $title = 'PSRI — repeated query';
+                    $name  = wf_scalar($ctx['contact']['name'] ?? '');
+                    $mob   = wf_scalar($ctx['contact']['mobile'] ?? '');
+                    $for   = wf_scalar($ctx['case']['callFor'] ?? '');
+                    $caseId = wf_scalar($ctx['case']['caseId'] ?? $ctx['case']['id'] ?? '');
+                    $sum   = wf_cut(wf_scalar($ctx['case']['summary'] ?? ''), 400);
+                    $total = (int) wf_scalar($ctx['case']['repeatCount'] ?? 0);
+                    $ord   = (int) wf_scalar($ctx['case']['repeatOrdinal'] ?? 0);
+                    $facts = [
+                        ['title' => 'Patient',  'value' => $name !== '' ? $name : '—'],
+                        ['title' => 'Mobile',   'value' => $mob !== '' ? $mob : '—'],
+                        ['title' => 'Call For', 'value' => $for !== '' ? $for : '—'],
+                    ];
+                    if ($total > 1) $facts[] = ['title' => 'Call', 'value' => ($ord > 0 ? "{$ord} of {$total} " : '') . 'about this concern'];
+                    $facts[] = ['title' => 'Concern', 'value' => $sum !== '' ? $sum : '—'];
+                    $facts[] = ['title' => 'Case ID', 'value' => $caseId !== '' ? $caseId : '—'];
+                    if (!empty($cfg['includeRepeatDates'])) {
+                        $first = wf_scalar($ctx['case']['repeatFirstDate'] ?? '');
+                        if ($first !== '') $facts[] = ['title' => 'First seen', 'value' => $first];
+                        $ids = wf_scalar($ctx['case']['repeatCaseIds'] ?? '');
+                        if ($ids !== '') $facts[] = ['title' => 'All cases', 'value' => $ids];
+                    }
+                    $plain = trim($title . ' — ' . $name . ' (' . $mob . '): ' . $sum);
+                    if (!$dry) {
+                        [, $err] = wf_http('POST', $url, wf_teams_payload($plain, $title, 'Details', $facts));
+                        if ($err !== '') return ['status' => 'error', 'error' => $err];
+                    }
+                    return ['status' => 'ok', 'detail' => 'teams → ' . $url];
+                }
                 $url = trim(wf_resolve($cfg['url'] ?? '', $ctx));
                 if ($url === '') return ['status' => 'error', 'error' => 'Webhook URL is empty'];
                 if (!$dry) {
@@ -757,6 +901,16 @@ function wf_fire(string $triggerKey, array $contact, array $case = [], array $op
     $ctx = ['contact' => $contact, 'case' => $case];
     if (is_array($opts['wa'] ?? null)) $ctx['wa'] = $opts['wa'];
     $caseId = wf_scalar($case['caseId'] ?? $case['id'] ?? '');
+    // A case-created run can branch on "has this person asked this before?" —
+    // computed from the saved row, so the workflow sees the same repeats as the
+    // "Repeated query" tab.
+    if ($triggerKey === 'case-created' && $caseId !== '' && !$dry) {
+        try {
+            $ctx['case'] += wf_repeat_info(psri_db(), $caseId);
+        } catch (Throwable $e) {
+            error_log('[psri-workflow] repeat lookup: ' . $e->getMessage());
+        }
+    }
     // WhatsApp triggers carry a message, not a record: every message runs the
     // workflow (wa.php only fires after a message is newly stored).
     $waTrigger = $triggerKey === 'wa-message' || $triggerKey === 'wa-followup';

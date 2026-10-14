@@ -24,12 +24,25 @@
 
 /** Normalised key for a case, or '' when the case can't be matched. */
 export function repeatKey(c) {
-  const mobile = String(c?.contactMobile || '').replace(/\D/g, '');
+  const mobile = mobileKey(c?.contactMobile);
   const concern = normalizeConcern(c?.summary);
   if (!mobile || !concern) return '';
   // Call For is allowed to be empty — two cases with no Call For still match.
   const callFor = normalizeConcern(c?.callFor);
   return `${mobile}|${callFor}|${concern}`;
+}
+
+/**
+ * The person's mobile as a comparable key: digits only, then the last 10.
+ *
+ * Rows are saved with or without the country code (+91 8448089345 and
+ * 8448089345 are the same person), so comparing every digit would split one
+ * person's calls across several groups. The last 10 digits are the national
+ * number, so they identify the person regardless of how it was typed.
+ */
+export function mobileKey(mobile) {
+  const digits = String(mobile || '').replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
 /** Lower-case, drop punctuation, collapse whitespace. */

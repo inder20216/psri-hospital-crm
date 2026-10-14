@@ -277,7 +277,48 @@ const VMM_FOLLOWUP_SEND_TEMPLATE_CONFIG = {
   ],
 };
 
+// ── "Repeated query → Teams" template ────────────────────────────────────────
+// When a case is created that says the same person has already raised this same
+// concern (same mobile + same Call For + same summary), post it to a Teams
+// channel so whoever is watching the channel can chase it.
+//
+//      Case Created → Repeated query? ─(true)→ Notify Teams
+//
+// The Teams webhook URL is left blank on purpose: the node can be saved before
+// the URL is known and is skipped until one is added, same as the WhatsApp
+// alerts.
+
+export const REPEAT_TEAMS_TEMPLATE_KEY = 'repeat-teams';
+
+const REPEAT_TEAMS_TEMPLATE_CONFIG = {
+  v: 1,
+  nodes: [
+    tplNode('rq-trigger',  'trigger',   'caseCreated', 240, 120, {}),
+    tplNode('rq-is-repeat', 'condition', 'condition',  240, 312, {
+      label: 'Repeated query?',
+      field: 'case.isRepeat', operator: 'eq', value: 'true',
+    }),
+    tplNode('rq-teams',    'action',    'notify',     240, 504, {
+      label: 'Notify Teams',
+      channel: 'Teams',
+      teamsUrl: '',
+      title: 'PSRI — repeated query',
+      includeRepeatDates: true,
+      url: '', phones: '', waTemplate: '', waLanguage: 'en', waParams: '',
+      message: '', from: '', to: '', subject: '', body: '',
+    }),
+  ],
+  edges: [
+    { id: 'rq-e1', source: 'rq-trigger', target: 'rq-is-repeat', sourceHandle: null, targetHandle: null },
+    { id: 'rq-e2', source: 'rq-is-repeat', target: 'rq-teams', sourceHandle: 'true', targetHandle: null },
+  ],
+};
+
 // ── Builders ─────────────────────────────────────────────────────────────────
+
+export function buildRepeatTeamsTemplate() {
+  return fromConfig(JSON.parse(JSON.stringify(REPEAT_TEAMS_TEMPLATE_CONFIG)));
+}
 
 export function buildVmmFollowupSendTemplate() {
   return fromConfig(JSON.parse(JSON.stringify(VMM_FOLLOWUP_SEND_TEMPLATE_CONFIG)));

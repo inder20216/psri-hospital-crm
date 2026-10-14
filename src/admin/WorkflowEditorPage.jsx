@@ -9,7 +9,7 @@ import { psri } from '../api/psri';
 import { useAuth } from '../context/AuthContext';
 import { fromConfig, getDef, isConditionLike, newNode, severityBlocks, toConfig, validateGraph } from './workflow/schema';
 import { nodeTypes } from './workflow/nodes';
-import { CASE_WHATSAPP_TEMPLATE_KEY, NEW_CASE_TEMPLATE_KEY, NEW_CONTACT_TEMPLATE_KEY, VMM_FOLLOWUP_SEND_TEMPLATE_KEY, buildCaseWhatsAppTemplate, buildNewCaseTemplate, buildNewContactTemplate, buildVmmFollowupSendTemplate } from './workflow/templates';
+import { CASE_WHATSAPP_TEMPLATE_KEY, NEW_CASE_TEMPLATE_KEY, NEW_CONTACT_TEMPLATE_KEY, REPEAT_TEAMS_TEMPLATE_KEY, VMM_FOLLOWUP_SEND_TEMPLATE_KEY, buildCaseWhatsAppTemplate, buildNewCaseTemplate, buildNewContactTemplate, buildRepeatTeamsTemplate, buildVmmFollowupSendTemplate } from './workflow/templates';
 import { triggerKeyFor } from './workflow/schema';
 import Palette from './workflow/Palette';
 import PropertyPanel from './workflow/PropertyPanel';
@@ -214,6 +214,11 @@ export default function WorkflowEditorPage() {
       setNodes(nds);
       setEdges(eds);
       setName('Case WhatsApp Alerts');
+    } else if (templateKey === REPEAT_TEAMS_TEMPLATE_KEY) {
+      const { nodes: nds, edges: eds } = buildRepeatTeamsTemplate();
+      setNodes(nds);
+      setEdges(eds);
+      setName('Repeated query → Teams');
     } else if (templateKey === VMM_FOLLOWUP_SEND_TEMPLATE_KEY) {
       const { nodes: nds, edges: eds } = buildVmmFollowupSendTemplate();
       setNodes(nds);
