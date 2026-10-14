@@ -18,6 +18,13 @@ import './Psri.css';
 // Appointment is deliberately excluded — a booking rarely needs the nudge.
 const QUERY_TYPE_NUDGE_CALL_FORS = ['Enquiry or Transfer', 'Complaint/Feedback', 'Emergency'];
 
+// Business rule: these Type of Enquiry values always mean the enquiry is a
+// high-value query (needs procedure/payment details captured), these others
+// always mean it should be transferred — so picking one auto-checks the
+// matching box instead of relying on the agent to remember to.
+const HIGH_VALUE_ENQUIRY_TYPES = ['Day Care Procedure', 'Surgery Related', 'Transplant Program'];
+const AUTO_TRANSFER_ENQUIRY_TYPES = ['Packages & Services', 'Room/ Bed Availability'];
+
 // Value-to-value dependency lookup (e.g. Specialty=Cardiology → Doctor options), with a
 // fallback to the flat base picklist if no dependency pairs exist yet for that value.
 function getDependentOptions(getDependentValues, getList, subField, mainField, mainValue) {
@@ -747,6 +754,11 @@ export default function CasesPage() {
     if (form.channel === 'Call' && !form.typeOfCall) e.typeOfCall = 'Select Type of Call';
     if (!form.callFor) e.callFor = 'Select Call For';
     if (!form.summary.trim()) e.summary = 'Summary is required';
+    if (form.isHighValue) {
+      if (!form.typeOfProcedure) e.typeOfProcedure = 'Required for a High Value Case';
+      if (!form.nameOfProcedure) e.nameOfProcedure = 'Required for a High Value Case';
+      if (!form.modeOfPayment) e.modeOfPayment = 'Required for a High Value Case';
+    }
     return e;
   };
 
@@ -1076,7 +1088,17 @@ export default function CasesPage() {
                 <label>Type of Enquiry</label>
                 <SearchableSelect
                   value={form.typeOfEnquiry}
-                  onChange={v => setForm(f => ({ ...f, typeOfEnquiry: v }))}
+                  onChange={v => setForm(f => ({
+                    ...f, typeOfEnquiry: v,
+                    // These enquiry types always mean one specific thing —
+                    // auto-check the matching box instead of making the agent
+                    // remember to do it themselves. Only ever turns a box ON;
+                    // never clears one the agent (or an earlier selection)
+                    // already checked, so switching the dropdown around can't
+                    // silently undo something real.
+                    isHighValue: HIGH_VALUE_ENQUIRY_TYPES.includes(v) ? true : f.isHighValue,
+                    isTransfer: AUTO_TRANSFER_ENQUIRY_TYPES.includes(v) ? true : f.isTransfer,
+                  }))}
                   options={getDependentOptions(getDependentValues, getList, 'Type of Enquiry', 'Call For', form.callFor)}
                 />
               </div>
@@ -1158,10 +1180,11 @@ export default function CasesPage() {
               <div className="psri-form-row">
                 <div className="psri-field">
                   <label>Type of Procedure</label>
-                  <select value={form.typeOfProcedure} onChange={e => setForm(f => ({ ...f, typeOfProcedure: e.target.value }))}>
+                  <select value={form.typeOfProcedure} onChange={e => setForm(f => ({ ...f, typeOfProcedure: e.target.value }))} className={errors.typeOfProcedure ? 'err' : ''}>
                     <option value="">— Select —</option>
                     {getList('Type of Procedure').map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
+                  {errors.typeOfProcedure && <p className="psri-err-msg">{errors.typeOfProcedure}</p>}
                 </div>
                 <div className="psri-field">
                   <label>Name of Procedure</label>
@@ -1175,15 +1198,17 @@ export default function CasesPage() {
                     caseSummary={form.summary}
                     caseId={form.id}
                   />
+                  {errors.nameOfProcedure && <p className="psri-err-msg">{errors.nameOfProcedure}</p>}
                 </div>
               </div>
               <div className="psri-form-row">
                 <div className="psri-field">
                   <label>Mode of Payment</label>
-                  <select value={form.modeOfPayment} onChange={e => setForm(f => ({ ...f, modeOfPayment: e.target.value }))}>
+                  <select value={form.modeOfPayment} onChange={e => setForm(f => ({ ...f, modeOfPayment: e.target.value }))} className={errors.modeOfPayment ? 'err' : ''}>
                     <option value="">— Select —</option>
                     {getList('Mode of Payment').map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
+                  {errors.modeOfPayment && <p className="psri-err-msg">{errors.modeOfPayment}</p>}
                 </div>
                 <div className="psri-field">
                   <label>Specialty Enquired For</label>
