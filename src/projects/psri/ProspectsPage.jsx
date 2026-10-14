@@ -35,6 +35,42 @@ function toLocalInput(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ── Date filter ─────────────────────────────────────────────────────────────
+// Prospect dates arrive as "YYYY-MM-DD HH:MM:SS" from MySQL, so parse that
+// shape explicitly — new Date() on a space-separated string is treated as local
+// time in some browsers and UTC in others, which shifts a day at the edges.
+function parseWhen(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  const d = new Date(/^\d{4}-\d{2}-\d{2} /.test(s) ? s.replace(' ', 'T') : s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function ymd(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function daysAgo(n) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - n);
+  return ymd(d);
+}
+
+const DATE_FIELDS = [
+  { key: 'created',       label: 'Created' },
+  { key: 'firstCallDate', label: 'First call' },
+  { key: 'lastCallAt',    label: 'Last call' },
+  { key: 'nextCallAt',    label: 'Next call' },
+];
+
+const DATE_PRESETS = [
+  { key: 'today', label: 'Today', from: 0,  to: 0 },
+  { key: '7d',    label: '7 days', from: 6,  to: 0 },
+  { key: '30d',   label: '30 days', from: 29, to: 0 },
+];
+
 function describeActivity(a) {
   switch (a.action) {
     case 'call_attempt': return `${a.agentName || 'Agent'} placed a call`;
@@ -130,8 +166,13 @@ export default function ProspectsPage() {
   const [bulkAssignTo, setBulkAssignTo]   = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [remarksOpenId, setRemarksOpenId] = useState(''); // which card's remarks popover is open, if any — agents only, admin sees remarks inline
-  const [adminTab, setAdminTab]           = useState('New'); // Admin/Super Admin only: 'New' | 'Other'
+  const [adminTab, setAdminTab]           = useState('New'); // Admin/Super Admin only: 'New' | 'New assigned' | 'Other'
   const [quickSelectCount, setQuickSelectCount] = useState('');
+  // Date filter — applied to every tab, so it survives a tab change.
+  const [dateField, setDateField]     = useState('created');
+  const [dateFrom,  setDateFrom]      = useState('');
+  const [dateTo,    setDateTo]        = useState('');
+  const [datePreset, setDatePreset]   = useState('');
   const [edit, setEdit]           = useState(emptyEdit);
   const [saving, setSaving]       = useState(false);
   const [saveErr, setSaveErr]     = useState('');
@@ -176,16 +217,66 @@ export default function ProspectsPage() {
   // on their own assigned leads, so untouched ones always surface first.
   const isNewLead = (p) => !p.leadStatus;
 
+  // "New assigned" = the same untouched lead, but an agent is already on it.
+  // This is the queue that goes quiet: created, handed to someone, and never
+  // picked up. Note it deliberately overlaps "New" — a lead is *both* fresh and
+  // assigned — so "New" stays exactly what it was, and this is the subset that
+  // has an owner to chase.
+  const isNewAssignedLead = (p) => !p.leadStatus && !!p.assignedTo;
+
+  const ADMIN_TABS = [
+    { key: 'New',          label: 'New',          test: isNewLead },
+    { key: 'New assigned', label: 'New assigned', test: isNewAssignedLead },
+    { key: 'Other',        label: 'Other',        test: (p) => !isNewLead(p) },
+  ];
+
+  // Keeps a prospect when its chosen date sits inside the range. A prospect with
+  // no value for the chosen field drops out — asking for "next call this week"
+  // should not return the ones with no next call booked.
+  const withinRange = useCallback((p) => {
+    if (!dateFrom && !dateTo) return true;
+    const d = parseWhen(p[dateField]);
+    if (!d) return false;
+    if (dateFrom) {
+      const start = new Date(`${dateFrom}T00:00:00`);
+      if (d < start) return false;
+    }
+    if (dateTo) {
+      const end = new Date(`${dateTo}T00:00:00`);
+      end.setHours(23, 59, 59, 999); // inclusive of the whole end day
+      if (d > end) return false;
+    }
+    return true;
+  }, [dateField, dateFrom, dateTo]);
+
+  // Everyone the viewer is allowed to see, before any tab is applied. The date
+  // filter narrows this, so the tab counts always reflect the chosen range.
+  const inScope = useMemo(() => {
+    const mine = isAdmin ? prospects : prospects.filter(p => p.assignedTo === currentUser?.id);
+    return mine.filter(withinRange);
+  }, [prospects, isAdmin, currentUser, withinRange]);
+
+  const tabCounts = useMemo(() => Object.fromEntries(
+    ADMIN_TABS.map(t => [t.key, inScope.filter(t.test).length]),
+  ), [inScope]);
+
   const visibleProspects = useMemo(() => {
     if (isAdmin) {
-      return prospects.filter(p => adminTab === 'New' ? isNewLead(p) : !isNewLead(p));
+      const tab = ADMIN_TABS.find(t => t.key === adminTab);
+      return tab ? inScope.filter(tab.test) : inScope;
     }
-    const mine = prospects.filter(p => p.assignedTo === currentUser?.id);
     // Stable sort (spec-guaranteed since ES2019) — New-leads partition moves
     // to the front, already-attempted ones follow, each group keeping its
     // existing relative order.
-    return [...mine].sort((a, b) => (isNewLead(a) === isNewLead(b)) ? 0 : (isNewLead(a) ? -1 : 1));
-  }, [prospects, isAdmin, adminTab, currentUser]);
+    return [...inScope].sort((a, b) => (isNewLead(a) === isNewLead(b)) ? 0 : (isNewLead(a) ? -1 : 1));
+  }, [inScope, isAdmin, adminTab]);
+
+  const applyPreset = (preset) => {
+    if (!preset) { setDateFrom(''); setDateTo(''); setDatePreset(''); return; }
+    setDateFrom(daysAgo(preset.from));
+    setDateTo(daysAgo(preset.to));
+    setDatePreset(preset.key);
+  };
 
   const handleQuickSelect = () => {
     const n = parseInt(quickSelectCount, 10);
@@ -351,22 +442,70 @@ export default function ProspectsPage() {
       <div className="psri-layout">
         <div className="psri-list">
           {isAdmin && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-              {['New', 'Other'].map(tab => (
+            <div className="psri-tabs">
+              {ADMIN_TABS.map(tab => (
                 <button
-                  key={tab}
+                  key={tab.key}
                   type="button"
-                  className={adminTab === tab ? 'psri-btn-primary' : 'psri-btn-ghost'}
-                  onClick={() => { setAdminTab(tab); setQuickSelectCount(''); }}
-                  style={{ fontSize: 13 }}
+                  className={adminTab === tab.key ? 'psri-btn-primary' : 'psri-btn-ghost'}
+                  onClick={() => { setAdminTab(tab.key); setQuickSelectCount(''); }}
+                  title={tab.key === 'New assigned'
+                    ? 'Created, assigned to an agent, and still untouched — nobody has set a lead status'
+                    : undefined}
                 >
-                  {tab}
+                  {tab.label}
+                  <span className="psri-tab-count">{tabCounts[tab.key] ?? 0}</span>
                 </button>
               ))}
             </div>
           )}
 
-          {isAdmin && adminTab === 'New' && (
+          {/* Date filter — applies to every tab, so switching tabs keeps it. */}
+          <div className="psri-date-filter">
+            <select
+              className="psri-date-select"
+              value={dateField}
+              onChange={e => setDateField(e.target.value)}
+              aria-label="Which date to filter on"
+            >
+              {DATE_FIELDS.map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+            <label className="psri-date-range">
+              From
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={e => { setDateFrom(e.target.value); setDatePreset(''); }}
+              />
+            </label>
+            <label className="psri-date-range">
+              To
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={e => { setDateTo(e.target.value); setDatePreset(''); }}
+              />
+            </label>
+            {DATE_PRESETS.map(preset => (
+              <button
+                key={preset.key}
+                type="button"
+                className={`psri-chip-btn${datePreset === preset.key ? ' active' : ''}`}
+                onClick={() => applyPreset(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
+            {(dateFrom || dateTo) && (
+              <button type="button" className="psri-chip-btn" onClick={() => applyPreset(null)}>
+                ✕ Clear
+              </button>
+            )}
+          </div>
+
+          {isAdmin && adminTab !== 'Other' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
               <input
                 type="number"
@@ -404,8 +543,11 @@ export default function ProspectsPage() {
           {!loading && !loadErr && visibleProspects.length === 0 && (
             <div className="psri-empty">
               {isAdmin
-                ? `No ${adminTab === 'New' ? 'new' : 'in-progress'} leads right now.`
+                ? (adminTab === 'Other'
+                  ? 'No in-progress leads right now.'
+                  : `No ${adminTab === 'New assigned' ? 'assigned but untouched' : 'new'} leads right now.`)
                 : 'No open prospects assigned to you right now.'}
+              {(dateFrom || dateTo) && ' Try clearing the date filter.'}
             </div>
           )}
           {!loading && visibleProspects.map(p => {

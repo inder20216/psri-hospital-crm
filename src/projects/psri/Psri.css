@@ -758,6 +758,71 @@ body.psri-wa-focus .psri-wa-tpl-head button { padding: 8px 12px; }
 body.psri-wa-focus .psri-modal { padding: 20px 16px; }
 body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
 
+/* ── PROSPECTS: TABS + DATE FILTER ── */
+.psri-tabs { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.psri-tabs button { font-size: 13px; }
+.psri-tab-count {
+  margin-left: 7px;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: var(--psri-bg);
+  color: var(--psri-text-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+.psri-tabs .psri-btn-primary .psri-tab-count { background: rgba(255, 255, 255, 0.28); color: #fff; }
+
+.psri-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.psri-date-select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--psri-border);
+  background: var(--psri-surface);
+  font-size: 12.5px;
+  color: var(--psri-text);
+  font-family: inherit;
+}
+.psri-date-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--psri-text-2);
+}
+.psri-date-range input[type=date] {
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1.5px solid var(--psri-border);
+  background: var(--psri-surface);
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--psri-text);
+}
+.psri-chip-btn {
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1.5px solid var(--psri-border);
+  background: var(--psri-surface);
+  color: var(--psri-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.psri-chip-btn:hover { border-color: var(--psri-primary); color: var(--psri-primary); }
+.psri-chip-btn.active {
+  background: var(--psri-primary);
+  border-color: var(--psri-primary);
+  color: #fff;
+}
+
 /* ── CASE FORM TWO-COLUMN LAYOUT ── */
 .psri-case-layout { display: flex; gap: 20px; align-items: flex-start; }
 .psri-case-main { flex: 1 1 auto; min-width: 0; }
