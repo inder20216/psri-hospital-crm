@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { findTopic, TUTORIAL, SUGGESTIONS } from './supportContent';
+import { findTopic, SUGGESTIONS } from './supportContent';
 
 // Turns a line written with **bold** into markup. Only that marker is honoured
 // and the text is rendered as text, so a line can never inject HTML.
@@ -47,8 +47,9 @@ export default function SupportBot({ openKey, onOpenTopic }) {
       : {
         id: `a${q}`,
         from: 'bot',
-        text: 'I do not have an answer for that one yet. I can help with:',
-        topics: TUTORIAL,
+        // No match: say so and stop. Listing every topic as a chip here just
+        // repeated the how-to list sitting directly underneath the chat.
+        text: 'I do not have an answer for that one yet. Try one of the questions below, or open the guide you need from the list underneath.',
       };
     setMessages(prev => [...prev, { id: `q${q}`, from: 'me', text: q }, reply]);
     setValue('');
@@ -117,34 +118,19 @@ export default function SupportBot({ openKey, onOpenTopic }) {
                 )}
               </div>
             )}
-
-            {m.topics && (
-              <div className="psri-bot-topics">
-                {m.topics.map(t => (
-                  <button
-                    key={t.key}
-                    type="button"
-                    className="psri-chip-btn"
-                    onClick={() => onOpenTopic(t.key)}
-                  >
-                    {t.icon} {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         ))}
       </div>
 
-      {messages.length === 1 && (
-        <div className="psri-bot-suggests">
-          {SUGGESTIONS.map(s => (
-            <button key={s} type="button" className="psri-chip-btn" onClick={() => ask(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* The question menu stays put at all times, so there is always somewhere
+          to go next without typing. */}
+      <div className="psri-bot-suggests">
+        {SUGGESTIONS.map(s => (
+          <button key={s} type="button" className="psri-chip-btn" onClick={() => ask(s)}>
+            {s}
+          </button>
+        ))}
+      </div>
 
       <div className="psri-bot-input">
         <input

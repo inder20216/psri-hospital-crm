@@ -929,7 +929,6 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
   display: flex; align-items: center; justify-content: center;
 }
 .psri-bot-open { margin-top: 12px; font-size: 12.5px; padding: 7px 14px; }
-.psri-bot-topics { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 
 .psri-bot-suggests {
   display: flex;
