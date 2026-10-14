@@ -839,77 +839,66 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
   color: #fff;
 }
 
-/* ── SUPPORT PAGE: tutorial bar + sections ─────────────────────────────────── */
-.psri-tutorial-bar {
+/* ── SUPPORT PAGE: how-to dropdowns ───────────────────────────────────────── */
+.psri-tut-list {
+  max-width: 820px;
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin: 0 0 18px;
-  padding: 8px;
-  overflow-x: auto;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: var(--psri-bg);
-  border-bottom: 1px solid var(--psri-border);
-  scrollbar-width: thin;
 }
-.psri-tut-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 7px 13px;
-  border-radius: 20px;
-  border: 1.5px solid var(--psri-border);
+.psri-tut {
   background: var(--psri-surface);
-  color: var(--psri-text-2);
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s;
+  border: 1.5px solid var(--psri-border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.psri-tut-chip:hover { border-color: var(--psri-primary); color: var(--psri-primary); }
-.psri-tut-chip.active {
-  background: var(--psri-primary);
+.psri-tut.open {
   border-color: var(--psri-primary);
-  color: #fff;
+  box-shadow: var(--psri-shadow);
 }
-/* The job number in the bar, so it maps to "1. Create a case" below. */
+
+/* The clickable header — the whole row is the dropdown control. */
+.psri-tut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--psri-text);
+}
+.psri-tut-row:hover { background: var(--psri-bg); }
+.psri-tut.open .psri-tut-row { border-bottom: 1px solid var(--psri-border); }
 .psri-tut-chip-n {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
   border-radius: 20px;
   background: var(--psri-primary-lt);
   color: var(--psri-primary-dk);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
 }
-.psri-tut-chip.active .psri-tut-chip-n { background: rgba(255, 255, 255, 0.28); color: #fff; }
-
-.psri-tut-list { max-width: 820px; }
-.psri-tut {
-  background: var(--psri-surface);
-  border: 1px solid var(--psri-border);
-  border-radius: var(--psri-radius);
-  box-shadow: var(--psri-shadow);
-  padding: 18px 20px;
-  margin-bottom: 14px;
-  /* Clears the sticky bar when a section is scrolled to. */
-  scroll-margin-top: 72px;
-  border-left: 3px solid transparent;
-  transition: border-color 0.2s;
+.psri-tut.open .psri-tut-chip-n { background: var(--psri-primary); color: #fff; }
+.psri-tut-icon { flex: 0 0 auto; font-size: 17px; line-height: 1; }
+.psri-tut-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--psri-text);
+  min-width: 0;
 }
-.psri-tut.active { border-left-color: var(--psri-primary); }
-.psri-tut-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 8px; }
-.psri-tut-icon { font-size: 19px; line-height: 1; }
-.psri-tut-h { font-size: 16px; font-weight: 700; color: var(--psri-text); margin: 0; }
 .psri-tut-who {
   margin-left: auto;
+  flex: 0 0 auto;
   font-size: 11px;
   font-weight: 700;
   color: var(--psri-primary-dk);
@@ -918,7 +907,24 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
   padding: 3px 10px;
   white-space: nowrap;
 }
-.psri-tut-what { font-size: 13.5px; line-height: 1.6; color: var(--psri-text-2); margin: 0 0 12px; }
+/* Chevron turns to point up when the guide is open. */
+.psri-tut-caret {
+  flex: 0 0 auto;
+  color: var(--psri-text-3);
+  font-size: 13px;
+  transition: transform 0.15s;
+}
+.psri-tut.open .psri-tut-caret { transform: rotate(180deg); color: var(--psri-primary); }
+
+.psri-tut-body { padding: 14px 16px 16px; }
+.psri-tut-what {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--psri-text-2);
+  margin: 0 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--psri-border);
+}
 .psri-tut-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .psri-tut-steps li { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; line-height: 1.55; color: var(--psri-text-2); }
 .psri-tut-n {

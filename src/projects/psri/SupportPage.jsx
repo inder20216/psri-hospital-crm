@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 // ── Tutorial content ─────────────────────────────────────────────────────────
 // Written as the things staff actually come here to do, in the order they do
@@ -188,51 +188,14 @@ const TUTORIAL = [
   },
 ];
 
-// Clicking a bar entry scrolls its section into view; the bar is sticky so it is
-// always reachable while reading.
+/**
+ * One job open at a time: each row is a dropdown that expands to show the steps.
+ * Opening another collapses the first, so the page never shows every guide at
+ * once. The first job starts open so the page never looks empty.
+ */
 export default function SupportPage() {
-  const [active, setActive] = useState(TUTORIAL[0].key);
-  const barRef = useRef(null);
-  const sectionRefs = useRef({});
-
-  const scrollTo = useCallback((key) => {
-    const el = sectionRefs.current[key];
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setActive(key);
-    // Keep the chosen chip visible in a bar that has to scroll.
-    const chip = barRef.current?.querySelector(`[data-key="${key}"]`);
-    if (chip && barRef.current) {
-      barRef.current.scrollTo({
-        left: chip.offsetLeft - barRef.current.clientWidth / 2 + chip.clientWidth / 2,
-        behavior: 'smooth',
-      });
-    }
-  }, []);
-
-  // Highlight whichever section is in view, so scrolling reads as well as
-  // clicking. Measured against the viewport rather than offsetTop, because
-  // .psri-page is position:relative — offsetTop would be measured from it, not
-  // from the document.
-  //
-  // The listener is registered in the capture phase on purpose: in the app the
-  // panel that scrolls is .ucrm-main (overflow-y:auto), not the window, and a
-  // scroll event does not bubble — a plain window listener would never fire and
-  // the bar would freeze on whatever was last clicked.
-  useEffect(() => {
-    const onScroll = () => {
-      const line = 140; // just under the sticky bar
-      let current = TUTORIAL[0].key;
-      for (const t of TUTORIAL) {
-        const el = sectionRefs.current[t.key];
-        if (el && el.getBoundingClientRect().top <= line) current = t.key;
-      }
-      setActive(current);
-    };
-    window.addEventListener('scroll', onScroll, true);
-    onScroll();
-    return () => window.removeEventListener('scroll', onScroll, true);
-  }, []);
+  const [openKey, setOpenKey] = useState(TUTORIAL[0].key);
+  const toggle = (key) => setOpenKey(cur => (cur === key ? '' : key));
 
   return (
     <div className="psri-page">
@@ -240,52 +203,47 @@ export default function SupportPage() {
         <div>
           <h1 className="psri-title">Support</h1>
           <p className="psri-subtitle">
-            How to do each job in the CRM, step by step. Pick one from the bar.
+            How to do each job in the CRM, step by step. Open the one you need.
           </p>
         </div>
       </div>
 
-      {/* The tutorial bar — one chip per job. */}
-      <nav className="psri-tutorial-bar" ref={barRef} aria-label="How-to guides">
-        {TUTORIAL.map((t, i) => (
-          <button
-            key={t.key}
-            type="button"
-            data-key={t.key}
-            className={`psri-tut-chip${active === t.key ? ' active' : ''}`}
-            onClick={() => scrollTo(t.key)}
-            aria-current={active === t.key ? 'true' : undefined}
-          >
-            <span className="psri-tut-chip-n">{i + 1}</span>
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
       <div className="psri-tut-list">
-        {TUTORIAL.map((t, i) => (
-          <section
-            key={t.key}
-            className={`psri-tut${active === t.key ? ' active' : ''}`}
-            ref={(el) => { sectionRefs.current[t.key] = el; }}
-          >
-            <div className="psri-tut-head">
-              <span className="psri-tut-icon">{t.icon}</span>
-              <h2 className="psri-tut-h">{i + 1}. {t.label}</h2>
-              <span className="psri-tut-who">{t.who}</span>
-            </div>
-            {t.summary && <p className="psri-tut-what">{t.summary}</p>}
-            <ol className="psri-tut-steps">
-              {t.steps.map((s, n) => (
-                // Index is the identity here — the steps are static content.
-                <li key={n}>
-                  <span className="psri-tut-n">{n + 1}</span>
-                  <span className="psri-tut-step">{bold(s)}</span>
-                </li>
-              ))}
-            </ol>
-          </section>
-        ))}
+        {TUTORIAL.map((t, i) => {
+          const isOpen = openKey === t.key;
+          return (
+            <section key={t.key} className={`psri-tut${isOpen ? ' open' : ''}`}>
+              <button
+                type="button"
+                className="psri-tut-row"
+                onClick={() => toggle(t.key)}
+                aria-expanded={isOpen}
+                aria-controls={`tut-body-${t.key}`}
+              >
+                <span className="psri-tut-chip-n">{i + 1}</span>
+                <span className="psri-tut-icon">{t.icon}</span>
+                <span className="psri-tut-label">{t.label}</span>
+                <span className="psri-tut-who">{t.who}</span>
+                <span className="psri-tut-caret" aria-hidden="true">▾</span>
+              </button>
+
+              {isOpen && (
+                <div className="psri-tut-body" id={`tut-body-${t.key}`}>
+                  {t.summary && <p className="psri-tut-what">{t.summary}</p>}
+                  <ol className="psri-tut-steps">
+                    {t.steps.map((s, n) => (
+                      // Index is the identity here — the steps are static content.
+                      <li key={n}>
+                        <span className="psri-tut-n">{n + 1}</span>
+                        <span className="psri-tut-step">{bold(s)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
     </div>
   );
