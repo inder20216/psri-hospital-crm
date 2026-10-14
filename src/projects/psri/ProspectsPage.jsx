@@ -212,17 +212,13 @@ export default function ProspectsPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // "New" = nobody's worked it yet — same definition the card's own "New"
-  // badge already uses (no lead status set). Admins get it as a tab filter
-  // (so they can round-robin fresh leads); agents get it as the sort order
-  // on their own assigned leads, so untouched ones always surface first.
-  const isNewLead = (p) => !p.leadStatus;
+  // The admin tabs are a clean three-way split of every prospect — untouched
+  // (no lead status set) and unassigned, untouched and already handed to an
+  // agent, or already worked. Nothing sits in two tabs at once.
+  const isNewUnassignedLead = (p) => !p.leadStatus && !p.assignedTo;
 
-  // "New assigned" = the same untouched lead, but an agent is already on it.
-  // This is the queue that goes quiet: created, handed to someone, and never
-  // picked up. Note it deliberately overlaps "New" — a lead is *both* fresh and
-  // assigned — so "New" stays exactly what it was, and this is the subset that
-  // has an owner to chase.
+  // "New assigned" = untouched, but an agent is already on it — the queue
+  // that goes quiet: created, handed to someone, and never picked up.
   const isNewAssignedLead = (p) => !p.leadStatus && !!p.assignedTo;
 
   // A follow-up is "due" the moment its date arrives, not only at the exact
@@ -237,9 +233,9 @@ export default function ProspectsPage() {
   };
 
   const ADMIN_TABS = [
-    { key: 'New',          label: 'New',          test: isNewLead },
+    { key: 'New',          label: 'New',          test: isNewUnassignedLead },
     { key: 'New assigned', label: 'New assigned', test: isNewAssignedLead },
-    { key: 'Other',        label: 'Other',        test: (p) => !isNewLead(p) },
+    { key: 'Other',        label: 'Other',        test: (p) => !!p.leadStatus },
   ];
 
   const AGENT_TABS = [
