@@ -936,7 +936,11 @@ export default function CasesPage() {
                 if (ch !== 'Call') setCalledSameAsContact(false);
               }}>
                 <option value="">— Select —</option>
-                {getList('Channel').map(v => <option key={v} value={v}>{v}</option>)}
+                {/* Only Call is offered for now — Chat/Digital Campaigns/Email
+                    still exist in the Picklists sheet (and the channel-switch
+                    logic above still handles them) but are hidden from this
+                    dropdown rather than deleted from the sheet. */}
+                {getList('Channel').filter(v => v === 'Call').map(v => <option key={v} value={v}>{v}</option>)}
               </select>
             </div>
             {form.channel === 'Call' && (
