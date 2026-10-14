@@ -104,17 +104,6 @@ export default function ProjectRail() {
           {expanded && <span className="rail-label">WhatsApp</span>}
         </Link>
 
-        {/* Support — help with the CRM, below WhatsApp */}
-        <Link
-          to="/psri/support"
-          className={`rail-item ${pathname === '/psri/support' ? 'active' : ''}`}
-          style={{ '--rail-color': '#0284c7' }}
-          title="Support"
-        >
-          <span className="rail-icon">🎧</span>
-          {expanded && <span className="rail-label">Support</span>}
-        </Link>
-
         {/* Productivity dashboard — Admin and Super Admin (TL/Manager) */}
         {isAdmin && (
           <Link
