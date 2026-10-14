@@ -4,9 +4,16 @@
  * thing a front desk needs to see before they call back, because the 3rd call
  * about the same problem deserves a different response to the 1st.
  *
- * Matching rule: same mobile number + same concern text, compared
- * case/punctuation/whitespace-insensitively, so "Guest wants Dr. Nripen
- * appointment!" and "guest wants dr nripen appointment" are one concern.
+ * Matching rule: same mobile number + same Call For + same concern text,
+ * compared case/punctuation/whitespace-insensitively, so
+ * "Guest wants Dr. Nripen appointment!" and "guest wants dr nripen appointment"
+ * are one concern.
+ *
+ * Call For is part of the match on purpose: the same person asking the same
+ * question about billing and then about appointment timings has not repeated
+ * themselves — those are two different desks' work. Two cases only count as a
+ * repeat when they are the same person, the same kind of call, and the same
+ * concern.
  *
  * Two cases with the same concern but different people are deliberately NOT a
  * repeat: "Appointment booked" from nine different patients is not nine calls
@@ -20,7 +27,9 @@ export function repeatKey(c) {
   const mobile = String(c?.contactMobile || '').replace(/\D/g, '');
   const concern = normalizeConcern(c?.summary);
   if (!mobile || !concern) return '';
-  return `${mobile}|${concern}`;
+  // Call For is allowed to be empty — two cases with no Call For still match.
+  const callFor = normalizeConcern(c?.callFor);
+  return `${mobile}|${callFor}|${concern}`;
 }
 
 /** Lower-case, drop punctuation, collapse whitespace. */
@@ -84,7 +93,8 @@ export function buildRepeatIndex(cases) {
         n: n + 1,
         total: ordered.length,
         dates,
-        concern: key.split('|')[1],
+        concern: key.split('|')[2],
+        callFor: key.split('|')[1],
       });
     });
   });

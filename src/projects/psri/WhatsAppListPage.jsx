@@ -241,6 +241,7 @@ export default function WhatsAppListPage() {
         g = {
           key: rep.key,
           concern: rep.concern,
+          callFor: c.callFor,
           total: rep.total,
           contactName: c.contactName,
           contactMobile: c.contactMobile,
@@ -455,7 +456,7 @@ export default function WhatsAppListPage() {
           type="button"
           className={`psri-wa-chip${isRepeatsView ? ' active' : ''}`}
           onClick={() => setFilter(f => (f === 'repeats' ? '' : 'repeats'))}
-          title="The same person raising the same concern more than once"
+          title="The same person raising the same concern, under the same Call For, more than once"
         >
           <span className="psri-wa-chip-num">↻</span> Repeated query · {repeatGroups.length}
         </button>
@@ -542,7 +543,7 @@ export default function WhatsAppListPage() {
                 <div>
                   <h2 className="psri-wa-tpl-title">Repeated query</h2>
                   <p className="psri-wa-tpl-sub">
-                    Same person, same concern, more than once · {repeatGroups.length} concern{repeatGroups.length !== 1 ? 's' : ''} · {repeatCallTotal} call{repeatCallTotal !== 1 ? 's' : ''}
+                    Same person, same Call For, same concern, more than once · {repeatGroups.length} concern{repeatGroups.length !== 1 ? 's' : ''} · {repeatCallTotal} call{repeatCallTotal !== 1 ? 's' : ''}
                   </p>
                 </div>
               </div>
@@ -561,9 +562,10 @@ export default function WhatsAppListPage() {
                       {g.contactMobile && <span className="cp-hint" style={{ margin: 0 }}>{g.contactMobile}</span>}
                     </div>
                     <div className="psri-wa-tpl-meta">
+                      {g.callFor && <span className="psri-badge">{g.callFor}</span>}
                       <span
                         className={`psri-badge psri-badge--repeat${g.total >= 4 ? ' psri-badge--hot' : ''}`}
-                        title={`${g.total} calls about the same concern`}
+                        title={`${g.total} calls about the same concern, same Call For`}
                       >
                         ↻ {g.total} call{g.total !== 1 ? 's' : ''} about this
                       </span>
