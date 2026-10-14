@@ -52,6 +52,16 @@ return [
         'verify_token'    => $env('PSRI_WA_VERIFY_TOKEN', ''),
         'app_secret'      => $env('PSRI_WA_APP_SECRET', ''),
     ],
+    // "Send Notification → Teams" default webhook.
+    // A node's own "Teams webhook URL" wins; this is the fallback, so the URL can
+    // live here (or in the PSRI_TEAMS_WEBHOOK_URL env var) instead of in every
+    // workflow that posts to Teams.
+    // In Teams: channel ▸ ⋯ ▸ Manage channel ▸ Workflows ▸ Add a workflow ▸ copy
+    // the URL. Treat it as a secret — anyone holding it can post to the channel,
+    // so it belongs in config.php (gitignored) and not in a workflow.
+    'teams' => [
+        'webhook_url' => $env('PSRI_TEAMS_WEBHOOK_URL', ''),
+    ],
     // Origin allowed to call the API from the browser ('*' = any). Set this
     // to the CRM's origin in production, e.g. https://crm.example.com
     'cors_origin' => $env('PSRI_CORS_ORIGIN', '*'),

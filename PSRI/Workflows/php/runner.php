@@ -757,6 +757,9 @@ function wf_action(string $type, array $cfg, array &$ctx, array $wf, bool $dry):
                     // Server-side only: Teams sends no CORS headers, so this
                     // cannot be done from the browser.
                     $url = trim(wf_resolve($cfg['teamsUrl'] ?? ($cfg['url'] ?? ''), $ctx));
+                    // Fall back to config so one URL can serve every Teams node
+                    // without repeating it in each workflow.
+                    if ($url === '') $url = trim((string) (psri_config()['teams']['webhook_url'] ?? ''));
                     if ($url === '') return ['status' => 'error', 'error' => 'Teams webhook URL is empty'];
                     $title = trim(wf_resolve($cfg['title'] ?? '', $ctx));
                     if ($title === '') $title = 'PSRI — repeated query';
