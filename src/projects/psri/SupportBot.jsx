@@ -15,12 +15,14 @@ function bold(text) {
 /**
  * Support assistant.
  *
- * Answers from supportContent.js — the same text the how-to guides on this page
- * are built from, plus the reference notes. No network call, no API key, and
- * nothing it can say that isn't written there. When it does not recognise a
- * question it says so and lists what it does know, rather than guessing.
+ * The whole Support page is this chat. Answers come from supportContent.js —
+ * the how-to guides and the reference notes — which is the only copy of that
+ * wording anywhere, so nothing on screen can drift out of step with what it
+ * says. No network call, no API key, and nothing it can answer that isn't
+ * written there. When it does not recognise a question it says so rather than
+ * guessing.
  */
-export default function SupportBot({ openKey, onOpenTopic }) {
+export default function SupportBot() {
   const [messages, setMessages] = useState([
     {
       id: 'hello',
@@ -47,9 +49,7 @@ export default function SupportBot({ openKey, onOpenTopic }) {
       : {
         id: `a${q}`,
         from: 'bot',
-        // No match: say so and stop. Listing every topic as a chip here just
-        // repeated the how-to list sitting directly underneath the chat.
-        text: 'I do not have an answer for that one yet. Try one of the questions below, or open the guide you need from the list underneath.',
+        text: 'I do not have an answer for that one yet. Try one of the questions below.',
       };
     setMessages(prev => [...prev, { id: `q${q}`, from: 'me', text: q }, reply]);
     setValue('');
@@ -105,17 +105,6 @@ export default function SupportBot({ openKey, onOpenTopic }) {
                       ))}
                     </ol>
                   )}
-
-                {/* Only a how-to has a matching dropdown to open. */}
-                {m.kind === 'howto' && (
-                  <button
-                    type="button"
-                    className="psri-btn-ghost psri-bot-open"
-                    onClick={() => onOpenTopic(m.topic.key)}
-                  >
-                    {openKey === m.topic.key ? 'Open below ↑' : 'Show the full guide'}
-                  </button>
-                )}
               </div>
             )}
           </div>

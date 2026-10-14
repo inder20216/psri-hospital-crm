@@ -1,9 +1,11 @@
 // ── Support knowledge base ───────────────────────────────────────────────────
-// Two layers, one source of truth:
+// Two layers, one source of truth. Nothing here is rendered anywhere else — the
+// Support page is just the assistant, so this file is the only copy of the
+// wording it answers with.
 //
-//   TUTORIAL  — numbered "how do I…" jobs, rendered as the dropdowns on the page
+//   TUTORIAL  — numbered "how do I…" jobs
 //   REFERENCE — explanations of what things mean (statuses, fields, roles,
-//               rules, troubleshooting), answered by the assistant
+//               rules, troubleshooting)
 //
 // The assistant searches both, so it can answer any question about the CRM
 // rather than only the step-by-step jobs.
