@@ -348,6 +348,18 @@ function wf_repeat_info(PDO $pdo, string $caseId): array {
 }
 
 /**
+ * Shortens a webhook URL for run logs. Teams / Power Automate put the actual
+ * secret in the query string (sig=…), and the run history is visible in the CRM,
+ * so it must never be written out in full.
+ */
+function wf_mask_url(string $url): string {
+    $p = parse_url($url);
+    if (!is_array($p) || empty($p['host'])) return 'the webhook';
+    $out = ($p['scheme'] ?? 'https') . '://' . $p['host'] . ($p['path'] ?? '');
+    return empty($p['query']) ? $out : $out . '?…';
+}
+
+/**
  * Builds a Microsoft Teams message that renders as an Adaptive Card on the
  * Power Automate / Workflows webhook, and degrades to a plain text line on the
  * older Incoming Webhook connector — which only reads `text`. One payload, so
@@ -789,7 +801,7 @@ function wf_action(string $type, array $cfg, array &$ctx, array $wf, bool $dry):
                         [, $err] = wf_http('POST', $url, wf_teams_payload($plain, $title, 'Details', $facts));
                         if ($err !== '') return ['status' => 'error', 'error' => $err];
                     }
-                    return ['status' => 'ok', 'detail' => 'teams → ' . $url];
+                    return ['status' => 'ok', 'detail' => 'teams → ' . wf_mask_url($url)];
                 }
                 $url = trim(wf_resolve($cfg['url'] ?? '', $ctx));
                 if ($url === '') return ['status' => 'error', 'error' => 'Webhook URL is empty'];
