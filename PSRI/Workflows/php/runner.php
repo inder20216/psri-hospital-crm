@@ -583,7 +583,7 @@ function wf_wa_recipient(string $s): string {
 }
 
 /** Minimal HTTP client — curl when available, PHP streams otherwise. Returns [status, error, body]. */
-function wf_http(string $method, string $url, $body = null, array $headers = []): array {
+function wf_http(string $method, string $url, $body = null, array $headers = [], int $timeout = 10): array {
     if (!preg_match('#^https?://#i', $url)) return [0, 'URL must start with http:// or https://', ''];
     $payload = $body === null ? null : json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $headers = array_merge(['Content-Type: application/json'], $headers);
@@ -592,7 +592,7 @@ function wf_http(string $method, string $url, $body = null, array $headers = [])
         curl_setopt_array($ch, [
             CURLOPT_CUSTOMREQUEST  => $method,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => 10,
+            CURLOPT_TIMEOUT        => $timeout,
             CURLOPT_HTTPHEADER     => $headers,
         ]);
         if ($payload !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
@@ -604,7 +604,7 @@ function wf_http(string $method, string $url, $body = null, array $headers = [])
         return [$code, $err !== '' ? $err : ($code >= 400 ? "Endpoint answered HTTP {$code}" : ''), is_string($res) ? $res : ''];
     }
     $ctx = stream_context_create(['http' => [
-        'method' => $method, 'timeout' => 10, 'ignore_errors' => true,
+        'method' => $method, 'timeout' => $timeout, 'ignore_errors' => true,
         'header' => implode("\r\n", $headers) . "\r\n", 'content' => $payload ?? '',
     ]]);
     $res = @file_get_contents($url, false, $ctx);

@@ -6,6 +6,8 @@
   "homepage": "https://inder20216.github.io/psri-hospital-crm",
   "scripts": {
     "dev": "vite --port 5200 --strictPort",
+    "support-kb": "node scripts/build-support-kb.mjs",
+    "prebuild": "npm run support-kb",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
