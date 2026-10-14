@@ -866,7 +866,10 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  max-height: 460px;
+  /* The chat is the whole Support page now, so give it real presence instead of
+     leaving a small card floating above empty space. */
+  min-height: 420px;
+  max-height: 62vh;
   overflow-y: auto;
   background: var(--psri-bg);
 }
@@ -913,6 +916,10 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
 .psri-bot-steps { list-style: none; margin: 11px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .psri-bot-steps li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--psri-text-2); }
 .psri-bot-steps strong { color: var(--psri-text); font-weight: 700; }
+/* Reference answers are prose, not steps. */
+.psri-bot-lines { margin: 11px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.psri-bot-line { margin: 0; font-size: 13px; line-height: 1.55; color: var(--psri-text-2); padding-left: 11px; border-left: 2px solid var(--psri-primary-lt); }
+.psri-bot-line strong { color: var(--psri-text); font-weight: 700; }
 .psri-bot-n {
   flex: 0 0 auto;
   width: 18px; height: 18px;
@@ -924,9 +931,6 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
-.psri-bot-open { margin-top: 12px; font-size: 12.5px; padding: 7px 14px; }
-.psri-bot-topics { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
-
 .psri-bot-suggests {
   display: flex;
   flex-wrap: wrap;
@@ -953,107 +957,6 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
   color: var(--psri-text);
 }
 .psri-bot-input input:focus { outline: none; border-color: var(--psri-primary); }
-
-/* ── SUPPORT PAGE: how-to dropdowns ───────────────────────────────────────── */
-.psri-tut-list {
-  max-width: 820px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.psri-tut {
-  background: var(--psri-surface);
-  border: 1.5px solid var(--psri-border);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.psri-tut.open {
-  border-color: var(--psri-primary);
-  box-shadow: var(--psri-shadow);
-}
-
-/* The clickable header — the whole row is the dropdown control. */
-.psri-tut-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 12px 14px;
-  border: none;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  color: var(--psri-text);
-}
-.psri-tut-row:hover { background: var(--psri-bg); }
-.psri-tut.open .psri-tut-row { border-bottom: 1px solid var(--psri-border); }
-.psri-tut-chip-n {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 20px;
-  background: var(--psri-primary-lt);
-  color: var(--psri-primary-dk);
-  font-size: 11px;
-  font-weight: 700;
-}
-.psri-tut.open .psri-tut-chip-n { background: var(--psri-primary); color: #fff; }
-.psri-tut-icon { flex: 0 0 auto; font-size: 17px; line-height: 1; }
-.psri-tut-label {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--psri-text);
-  min-width: 0;
-}
-.psri-tut-who {
-  margin-left: auto;
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--psri-primary-dk);
-  background: var(--psri-primary-lt);
-  border-radius: 20px;
-  padding: 3px 10px;
-  white-space: nowrap;
-}
-/* Chevron turns to point up when the guide is open. */
-.psri-tut-caret {
-  flex: 0 0 auto;
-  color: var(--psri-text-3);
-  font-size: 13px;
-  transition: transform 0.15s;
-}
-.psri-tut.open .psri-tut-caret { transform: rotate(180deg); color: var(--psri-primary); }
-
-.psri-tut-body { padding: 14px 16px 16px; }
-.psri-tut-what {
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--psri-text-2);
-  margin: 0 0 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px dashed var(--psri-border);
-}
-.psri-tut-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.psri-tut-steps li { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; line-height: 1.55; color: var(--psri-text-2); }
-.psri-tut-n {
-  flex: 0 0 auto;
-  width: 20px; height: 20px;
-  margin-top: 1px;
-  border-radius: 50%;
-  background: var(--psri-primary);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  display: flex; align-items: center; justify-content: center;
-}
-.psri-tut-step strong { color: var(--psri-text); font-weight: 700; }
 
 /* ── CASE FORM TWO-COLUMN LAYOUT ── */
 .psri-case-layout { display: flex; gap: 20px; align-items: flex-start; }
