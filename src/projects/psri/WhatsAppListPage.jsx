@@ -94,11 +94,14 @@ const rowId = (c, key) => `${c.id}:${key}`;
 // ── Group action buttons on this page ────────────────────────────────────────
 // The button is a generic "Send in group" (the desk it targets is named in the
 // tooltip) rather than the old per-desk "Open <Desk> →". Desks listed in
-// HIDDEN_GROUP_BUTTONS get no button at all, and sending is not wired up yet so
-// the buttons are disabled.
+// HIDDEN_GROUP_BUTTONS get no button at all.
+//
+// The group is opened in WhatsApp (a new window) and the message is put on the
+// clipboard for the agent to paste — the same flow the case-form widget uses.
+// It needs no backend, so it works as soon as a group link exists.
 const SEND_IN_GROUP_LABEL = 'Send in group';
 const HIDDEN_GROUP_BUTTONS = new Set(['highValueGeneral']);
-const GROUP_SEND_ENABLED = false;
+const GROUP_SEND_ENABLED = true;
 
 const COPIED_STORE = 'psri.wa.copied.v1';
 
@@ -341,6 +344,20 @@ export default function WhatsAppListPage() {
     markCopied(c, key);
   };
 
+  // Opens the desk's WhatsApp group and copies the message so the agent can paste
+  // it. The window is opened *before* the clipboard call on purpose: clipboard
+  // writes are async, and a window.open after an await is no longer a user
+  // gesture, so browsers would block the popup.
+  const sendInGroup = (c, group, key) => {
+    let opened = false;
+    if (group.url) opened = !!window.open(group.url, '_blank', 'noopener,noreferrer');
+    copyText(buildWaMessage(key, c));
+    markCopied(c, key);
+    if (!group.url) showFlash('No group link set for this desk yet');
+    else if (opened) showFlash(`${group.label} opened — message copied, paste it in the group`);
+    else showFlash('Message copied — your browser blocked the popup, allow popups to open the group');
+  };
+
   // One rendered notification card. `isCopied` switches the primary action from
   // "Copy message" (which moves it to the Copy list) to "Restore".
   const renderCard = (c, groups, key, isCopied) => (
@@ -396,9 +413,9 @@ export default function WhatsAppListPage() {
             <span
               key={g.id}
               className="psri-wa-sendwrap"
-              title={`Send to ${g.label}${g.url ? '' : ' — group link not set'}`}
+              title={`Copy the message and open ${g.label} in WhatsApp, then paste it there`}
             >
-              <button type="button" className="psri-btn-primary" disabled={!GROUP_SEND_ENABLED}>
+              <button type="button" className="psri-btn-primary" disabled={!GROUP_SEND_ENABLED} onClick={() => sendInGroup(c, g, key)}>
                 {many ? `${SEND_IN_GROUP_LABEL} · ${g.label}` : SEND_IN_GROUP_LABEL}
               </button>
             </span>
