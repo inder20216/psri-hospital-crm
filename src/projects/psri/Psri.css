@@ -173,6 +173,15 @@
   border-radius: 20px;
 }
 
+/* "Call 2 of 3 about this" — the same person has raised this concern before, so
+   it is flagged in amber to stand out from the routine badges next to it. */
+.psri-badge--repeat {
+  background: #fef3c7;
+  color: #92400e;
+  box-shadow: inset 0 0 0 1px #fcd34d;
+  cursor: help;
+}
+
 .psri-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .psri-action-btn {
   width: 32px; height: 32px;
@@ -716,6 +725,81 @@ body.psri-wa-focus .psri-wa-tpl-head button { padding: 8px 12px; }
 /* QR dialog fits a small screen. */
 body.psri-wa-focus .psri-modal { padding: 20px 16px; }
 body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
+
+/* ── SUPPORT PAGE ──────────────────────────────────────────────────────────── */
+.psri-sup-card {
+  background: var(--psri-surface);
+  border: 1px solid var(--psri-border);
+  border-radius: var(--psri-radius);
+  box-shadow: var(--psri-shadow);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  max-width: 820px;
+}
+.psri-sup-h { font-size: 15px; font-weight: 700; color: var(--psri-text); margin: 0 0 10px; }
+.psri-sup-lead { font-size: 13.5px; line-height: 1.6; color: var(--psri-text-2); margin: 0 0 12px; }
+.psri-sup-hint {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px dashed #fcd34d;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 0;
+}
+.psri-sup-hint code {
+  font-size: 12px;
+  background: rgba(146, 64, 14, 0.10);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.psri-sup-hours { font-size: 12.5px; color: var(--psri-text-3); margin: 12px 0 0; }
+
+/* Contact rows — wrap rather than overflow, so a narrow window is still fine. */
+.psri-sup-rows { display: flex; flex-direction: column; gap: 10px; }
+.psri-sup-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1.5px solid var(--psri-border);
+  border-radius: 12px;
+  transition: all 0.15s;
+}
+.psri-sup-row:hover { border-color: var(--psri-primary); background: var(--psri-primary-lt); }
+.psri-sup-row--wa:hover { border-color: #25d366; background: #f0fdf4; }
+.psri-sup-icon { font-size: 20px; line-height: 1; }
+.psri-sup-row-txt { display: flex; flex-direction: column; gap: 2px; min-width: 160px; }
+.psri-sup-row-txt strong { font-size: 13.5px; color: var(--psri-text); }
+.psri-sup-row-txt small { font-size: 11.5px; color: var(--psri-text-3); }
+.psri-sup-go {
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--psri-primary-dk);
+  word-break: break-all;
+}
+
+/* Numbered/checked lists. */
+.psri-sup-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.psri-sup-list li { display: flex; align-items: flex-start; gap: 9px; font-size: 13.5px; line-height: 1.55; color: var(--psri-text-2); }
+.psri-sup-num { flex: 0 0 auto; background: var(--psri-primary); color: #fff; margin-top: 1px; }
+.psri-sup-list--plain li::before { content: '•'; color: var(--psri-primary); font-weight: 700; flex: 0 0 auto; }
+.psri-sup-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.psri-sup-steps li { font-size: 13.5px; line-height: 1.6; color: var(--psri-text-2); }
+.psri-sup-steps strong { color: var(--psri-text); }
+.psri-sup-note {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--psri-text-2);
+  background: var(--psri-bg);
+  border-left: 3px solid var(--psri-primary);
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  margin: 12px 0 0;
+}
 
 /* ── CASE FORM TWO-COLUMN LAYOUT ── */
 .psri-case-layout { display: flex; gap: 20px; align-items: flex-start; }

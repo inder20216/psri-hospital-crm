@@ -4,6 +4,7 @@ import { psri } from '../../api/psri';
 import { usePicklists } from '../../context/PicklistsContext';
 import { resolveWhatsAppGroups, groupInviteLink } from './whatsappGroups';
 import { WA_TEMPLATES, caseTemplates, buildWaMessage } from './waNotifications';
+import { buildRepeatIndex, repeatTitle } from './repeatCalls';
 import './Psri.css';
 
 function fmtWhen(iso) {
@@ -222,6 +223,10 @@ export default function WhatsAppListPage() {
 
   const copiedSet = useMemo(() => new Set(copied), [copied]);
 
+  // How many times this person has raised this same concern. Only cases that
+  // belong to a repeat group get an entry, so the badge shows on 2nd+ calls.
+  const repeats = useMemo(() => buildRepeatIndex(cases), [cases]);
+
   // Only cases that trigger a template are listed — a case with no match has no
   // notification to send, so it simply is not shown.
   const activeRows = useMemo(() => rows.filter(r => r.keys.length > 0), [rows]);
@@ -300,6 +305,15 @@ export default function WhatsAppListPage() {
         {c.contactMobile && <span className="cp-hint" style={{ margin: 0 }}>{c.contactMobile}</span>}
         {c.callFor && <span className="psri-badge">{c.callFor}</span>}
         {c.status && <span className="psri-badge">{c.status}</span>}
+        {(() => {
+          const rep = repeats.get(c.id);
+          if (!rep) return null;
+          return (
+            <span className="psri-badge psri-badge--repeat" title={repeatTitle(rep)}>
+              ↻ Call {rep.n} of {rep.total} about this
+            </span>
+          );
+        })()}
       </div>
 
       <pre className="psri-wa-msg">{buildWaMessage(key, c)}</pre>
