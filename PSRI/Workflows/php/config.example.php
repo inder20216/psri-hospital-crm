@@ -62,6 +62,17 @@ return [
     'teams' => [
         'webhook_url' => $env('PSRI_TEAMS_WEBHOOK_URL', ''),
     ],
+    // Support assistant AI fallback (support_ai.php) — any OpenAI-compatible
+    // chat API. Blank api_key = the assistant answers from the guides only.
+    // The key lives here (or in PSRI_OPENAI_API_KEY) and must never go in
+    // the browser bundle. base_url can point at any OpenAI-compatible
+    // gateway. Costs are capped inside support_ai.php; also set a spend
+    // limit on the account. Check it: php api.php support-ask "what is a case?"
+    'support' => [
+        'api_key'  => $env('PSRI_OPENAI_API_KEY', ''),
+        'model'    => $env('PSRI_OPENAI_MODEL', 'gpt-4.1-mini'),
+        'base_url' => $env('PSRI_OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+    ],
     // Origin allowed to call the API from the browser ('*' = any). Set this
     // to the CRM's origin in production, e.g. https://crm.example.com
     'cors_origin' => $env('PSRI_CORS_ORIGIN', '*'),

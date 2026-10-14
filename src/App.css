@@ -21,3 +21,24 @@
 body.psri-wa-focus .ucrm-shell > :not(.ucrm-main) { display: none !important; }
 /* dvh keeps the last row from hiding behind a phone's address bar. */
 body.psri-wa-focus .ucrm-shell { height: 100vh; height: 100dvh; }
+
+/* ── PHONE / SMALL TABLET SHELL ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .ucrm-shell { height: 100vh; height: 100dvh; }
+  /* Content starts under the 56px top bar and ends above the floating
+     dialer / missed-calls buttons along the bottom edge. */
+  .ucrm-main { padding-top: 56px; padding-bottom: 84px; }
+  /* The WhatsApp phone view hides the top bar with the rest of the chrome. */
+  body.psri-wa-focus .ucrm-main { padding-top: 0; padding-bottom: 0; }
+}
+
+/* ── LOGIN SCREEN ── (inline-styled in App.jsx, so these need !important) */
+@media (max-width: 768px) {
+  .login-screen { flex-direction: column; }
+  .login-hero { flex: 0 0 auto !important; padding: 28px 22px !important; }
+  .login-hero-brand { margin-bottom: 20px !important; }
+  .login-hero-pitch { margin-bottom: 0 !important; }
+  .login-hero-pitch h1 { font-size: 24px !important; }
+  .login-hero-foot { display: none; }
+  .login-panel { padding: 28px 20px 40px !important; align-items: flex-start !important; }
+}

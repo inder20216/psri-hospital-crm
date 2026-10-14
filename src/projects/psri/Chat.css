@@ -332,3 +332,14 @@
 /* Bot channel highlight in sidebar */
 .chat-channel-item.bot-channel { color: #0d9488; }
 .chat-channel-item.bot-channel.active { background: #f0fdfa; color: #0f766e; }
+
+/* ── PHONE / SMALL TABLET ── the toggle sits in the 56px top bar and the panel
+   spans the screen width under it. */
+@media (max-width: 768px) {
+  .chat-toggle-btn { top: 9px; right: 10px; }
+  .chat-panel {
+    top: 64px; left: 8px; right: 8px;
+    width: auto; max-width: none;
+    height: calc(100dvh - 80px); max-height: none;
+  }
+}

@@ -1235,7 +1235,9 @@ export default function CasesPage() {
             </div>
           )}
 
-          <WhatsAppGroupWidget form={form} />
+          {/* Desk WhatsApp groups are an Admin / Super Admin tool, like the
+              WhatsApp list in the rail — agents don't see the card. */}
+          {isAdmin && <WhatsAppGroupWidget form={form} />}
 
           </div>{/* /psri-form-gated */}
 

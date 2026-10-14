@@ -931,6 +931,36 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
+/* Tutorial button in the header, the guide menu, and per-card actions. */
+.psri-bot-tutorial { margin-left: auto; font-size: 12.5px; white-space: nowrap; }
+.psri-bot-menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; margin-top: 10px; }
+.psri-bot-menu-item {
+  display: flex; align-items: center; gap: 8px;
+  text-align: left;
+  font-size: 13px; color: var(--psri-text);
+  background: var(--psri-bg);
+  border: 1px solid var(--psri-border);
+  border-radius: 9px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.psri-bot-menu-item:hover { border-color: var(--psri-primary); background: var(--psri-primary-lt); }
+.psri-bot-menu-item em { margin-left: auto; font-style: normal; font-size: 10.5px; color: var(--psri-text-3); white-space: nowrap; }
+.psri-bot-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; }
+.psri-bot-card-actions:empty { display: none; }
+.psri-bot-done { font-size: 12.5px; color: var(--psri-text-2); }
+/* AI answers: short prose plus bullets, in a plain bubble. */
+.psri-bot-ai {
+  background: var(--psri-surface);
+  border: 1px solid var(--psri-border);
+  border-radius: 12px;
+  padding: 11px 14px;
+  display: flex; flex-direction: column; gap: 7px;
+}
+.psri-bot-ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--psri-text-2); }
+.psri-bot-ul strong, .psri-bot-ai strong { color: var(--psri-text); font-weight: 700; }
+.psri-bot-pending { font-style: italic; color: var(--psri-text-3); }
+
 .psri-bot-suggests {
   display: flex;
   flex-wrap: wrap;
@@ -1833,3 +1863,99 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
 .mc-bar-btn--1 { background: #fee2e2; color: #b91c1c; }
 .mc-bar-btn--2 { background: #ffedd5; color: #9a3412; }
 .mc-bar-btn--3 { background: #fef9c3; color: #854d0e; }
+
+/* ══════════════════════════════════════
+   PHONE / SMALL TABLET (≤ 768px)
+   Same breakpoint as the rail drawer (ProjectRail.jsx COMPACT_QUERY). The
+   WhatsApp page's own phone mode (body.psri-wa-focus, above) still applies on
+   top of this on a real phone.
+   ══════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Page frame */
+  .psri-page { padding: 16px 14px; }
+  .psri-top { flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+  .psri-title { font-size: 20px; }
+
+  /* Search + primary action: search takes its own full-width line. The
+     z-index lift exists for desktop floating widgets; on a phone they sit in
+     the top bar / bottom edge, and 9999 would draw the button over the menu. */
+  .psri-search-row { flex-wrap: wrap; gap: 10px; }
+  .psri-search-input { max-width: none; flex: 1 1 100%; }
+  .psri-search-row .psri-btn-primary { z-index: auto; }
+
+  /* 16px stops iOS zooming the page when a field is focused. */
+  .psri-page input:not([type=checkbox]):not([type=radio]),
+  .psri-page select,
+  .psri-page textarea { font-size: 16px; }
+
+  /* Detail + forms */
+  .psri-detail-grid { grid-template-columns: 1fr; }
+  .psri-detail-head { flex-wrap: wrap; }
+  .psri-form-fullpage { padding: 18px 16px; }
+  .psri-field { min-width: 0; flex-basis: 100%; }
+  .psri-isd-select { width: 100px; flex-basis: 100px; }
+  .psri-form-actions-sticky { flex-wrap: wrap; }
+  .psri-form-actions-sticky > button { flex: 1 1 auto; }
+  .psri-specialty-info-panel { max-width: none; }
+  .psri-tip-popover { width: min(260px, 78vw); }
+  .psri-agent-bar { flex-wrap: wrap; }
+  .psri-agent-select { min-width: 0; flex: 1; }
+
+  /* Filters, tabs, date range */
+  .psri-date-range { flex: 1 1 140px; }
+  .psri-date-range input[type=date] { flex: 1; min-width: 0; }
+
+  /* Tables already scroll sideways — make it smooth on touch. */
+  .psri-table-wrap { -webkit-overflow-scrolling: touch; }
+  .psri-table td.psri-td-wrap { min-width: 200px; }
+
+  /* Dialogs fill the screen width */
+  .psri-modal-overlay { padding: 10px; }
+  .psri-modal { padding: 18px 16px; max-height: 92vh; max-height: 92dvh; }
+  .psri-modal-actions { flex-wrap: wrap; }
+  .psri-modal-actions > button { flex: 1 1 auto; }
+
+  .psri-toast { left: 12px; right: 12px; top: 64px; }
+
+  /* Support chat */
+  .psri-bot-head { flex-wrap: wrap; }
+  .psri-bot-log { min-height: 300px; max-height: 58vh; max-height: 58dvh; padding: 12px; }
+  .psri-bot-msg { max-width: 100%; }
+  .psri-bot-menu { grid-template-columns: 1fr; }
+
+  /* ── Floating widgets ──
+     Top bar (56px): Doctor Lookup + Chat buttons on its right.
+     Bottom edge: Missed Calls bar on the left, SparkTG phone button right.
+     Panels span the screen width instead of their desktop px widths. */
+  .dr-lookup-toggle-btn { top: 9px; right: 56px; }
+  .dr-lookup-panel { top: 64px; left: 8px; right: 8px; width: auto; max-height: calc(100dvh - 80px); }
+
+  .mc-bar { top: auto; bottom: 14px; left: 10px; right: auto; }
+  .mc-bar-btn { min-width: 54px; }
+  .mc-list {
+    top: auto !important; bottom: 100%;
+    margin: 0 0 6px !important;
+    width: min(340px, calc(100vw - 20px)) !important;
+    max-height: 60vh !important;
+  }
+
+  .stg-toggle-btn { bottom: 14px; right: 12px; }
+  .stg-debug-btn { bottom: 74px; }
+  .stg-iframe {
+    left: 8px; right: 8px; bottom: 76px;
+    width: auto;
+    height: min(500px, calc(100dvh - 150px));
+  }
+  .stg-debug-panel { left: 8px; right: 8px; bottom: 120px; width: auto; max-height: 50vh; }
+  .stg-dialer-panel {
+    top: 64px; right: 8px; left: 8px;
+    width: auto;
+    transform: none;
+    max-height: calc(100dvh - 150px);
+    animation: stgPanelInPhone 0.2s ease;
+  }
+}
+@keyframes stgPanelInPhone {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: none; }
+}

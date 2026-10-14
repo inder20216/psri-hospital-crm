@@ -80,6 +80,12 @@ export const psri = {
     .catch(err => { console.warn('[picklist] getPicklistSuggestions failed:', err.message); return []; }),
   reviewPicklistSuggestion: (data) => post('psri-picklist-suggestion-review', data, WF_BASE),
 
+  // Support assistant AI fallback, for questions the written guides don't
+  // match. The server grounds it on its own copy of the guides. Never throws:
+  // resolves { success, answer, documented } or { success:false, error }.
+  askSupport: (question, history) => post('psri-support-ask', { question, history }, WF_BASE)
+    .catch(err => ({ success: false, error: err.message })),
+
   getSpecialtySummaries: () => get('psri-specialty-summaries'),
   getGuidance:           () => get('psri-guidance'),
 

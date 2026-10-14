@@ -214,3 +214,19 @@
   .wf-palette { width: 180px; }
   .wf-right-col { width: 250px; }
 }
+/* ── PHONE / SMALL TABLET ──
+   The designer is a desktop tool, but it should still be usable to check or
+   flip a workflow on a phone: stack palette, canvas and panel and let the page
+   scroll instead of squeezing three columns into one screen. The top-right
+   floating buttons live in the top bar here, so the 68px clearance goes. */
+@media (max-width: 768px) {
+  .wf-editor-page { height: auto; min-height: 100%; overflow: visible; padding-top: 16px; }
+  .admin-page.wf-list-page { padding-top: 16px; }
+  .wf-workspace { flex-direction: column; }
+  .wf-palette, .wf-right-col { width: 100%; }
+  .wf-palette { max-height: 220px; }
+  .wf-canvas { flex: none; height: 60vh; min-height: 360px; }
+  .wf-right-col { min-height: 420px; }
+  .wf-toolbar .wf-name-input { flex-basis: 100%; }
+  .admin-top-actions { flex-wrap: wrap; }
+}

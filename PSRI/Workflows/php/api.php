@@ -23,6 +23,14 @@
  *   GET  psri-picklist-suggestions?status= → { success, suggestions:[…] } (status: pending|approved|rejected, blank=all)
  *   POST psri-picklist-suggestion-review {id,approved,reviewerId,reviewerName} → { success, id, message, warning? }
  *
+ *   Support assistant:
+ *   POST psri-support-ask {question, history?}  (docs = server's support_kb.md)
+ *                                             → { success, answer, documented }
+ *                                             (documented:false = the docs don't
+ *                                             cover it; success:false with error
+ *                                             ai-not-configured/ai-unavailable
+ *                                             is a server gap, not a user error)
+ *
  *   WhatsApp chat (Cloud API) — see wa.php:
  *   GET  psri-wa-threads?limit=          → { success, threads:[…] }
  *   GET  psri-wa-thread?id=&title=&limit= → { success, thread, messages:[…] } (creates the thread if new)
@@ -55,6 +63,7 @@ require_once __DIR__ . '/cases.php';
 require_once __DIR__ . '/reports.php';
 require_once __DIR__ . '/prospects.php';
 require_once __DIR__ . '/picklist_suggestions.php';
+require_once __DIR__ . '/support_ai.php';
 require_once __DIR__ . '/wa.php';
 
 if (PHP_SAPI === 'cli') {
@@ -67,6 +76,17 @@ if (PHP_SAPI === 'cli') {
         $trigger = api_trigger_of($graph);
         [$contact, $case] = api_context($trigger, $payload['contact'] ?? [], $payload['case'] ?? []);
         echo json_encode(wf_fire($trigger, $contact, $case, ['graph' => $graph, 'dryRun' => true]), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+    } elseif ($cmd === 'support-ask' && ($argv[2] ?? '') !== '') {
+        // Checks the Support assistant's AI connection.
+        //   php api.php support-ask "what is a case?"
+        // The documentation is the server's own support_kb.md
+        // (generated from supportContent.js on every build), so a
+        // question covered by the guides is the useful test — it
+        // proves the whole round trip, key included.
+        $res = ps_support_ask(['question' => $argv[2]]);
+        if (isset($res['error'])) { fwrite(STDERR, $res['error'] . "\n"); exit(1); }
+        echo ($res['documented'] ? '' : '(not in the documentation) ') . $res['answer'] . "\n";
+        exit(0);
     } elseif ($cmd === 'wa-test' && ($argv[2] ?? '') !== '') {
         // Sends one real WhatsApp template (default: Meta's pre-approved hello_world) to check the credentials.
         $to = wf_wa_recipient($argv[2]);
@@ -97,7 +117,8 @@ if (PHP_SAPI === 'cli') {
         exit(0);
     } else {
         fwrite(STDERR, "usage: php api.php migrate | test <graph.json> [payload.json] | wa-test <number|group:ID> [template] [language] [values…]\n"
-            . "       | wa-group-create \"<subject>\" [\"<description>\"] | wa-groups\n");
+            . "       | wa-group-create \"<subject>\" [\"<description>\"] | wa-groups\n"
+            . "       | support-ask \"<question>\"\n");
         exit(2);
     }
     exit(0);
@@ -231,6 +252,17 @@ try {
         case 'psri-picklist-suggestion-review':
             $res = ps_review($body);
             if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
+
+        case 'psri-support-ask':
+            $res = ps_support_ask($body);
+            if (isset($res['error'])) {
+                // "question is required" is the caller's fault; the rest
+                // are a setup gap or an upstream failure, so they are
+                // answered 200 with success:false to degrade gracefully.
+                if ($res['error'] === 'question is required') api_out(['success' => false, 'error' => $res['error']], 400);
+                api_out(['success' => false, 'error' => $res['error']], 200);
+            }
             api_out(['success' => true] + $res);
 
         case 'psri-workflow-get':
