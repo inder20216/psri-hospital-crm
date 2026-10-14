@@ -35,6 +35,7 @@ export const DEFAULT_PICKLISTS = {
 };
 
 const PicklistsContext = createContext(null);
+const POLL_INTERVAL_MS = 60000; // same cadence as the other live-data widgets (e.g. Missed Calls)
 
 export function PicklistsProvider({ children }) {
   const [picklists, setPicklists] = useState({});
@@ -50,7 +51,15 @@ export function PicklistsProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  // Picklists only ever used to be fetched once per page load, so a newly
+  // approved suggestion (or any sheet edit) never reached an already-open
+  // tab until the agent manually reloaded. Polling keeps a live session
+  // current without needing that.
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   const getList = (listName) => {
     const fromSheet = picklists[listName] || [];
