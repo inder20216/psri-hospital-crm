@@ -35,6 +35,7 @@ export default function PicklistSuggestionsPage() {
   const dupChecked = useRef(new Set());                    // ids already sent through the duplicate check — avoid re-firing every render
   const [rejectingId, setRejectingId] = useState(0);       // which row's reject-reason box is open
   const [rejectReason, setRejectReason] = useState('');
+  const [rejectExistingValue, setRejectExistingValue] = useState(''); // picked from the picklist — drives the auto-correct-the-case behaviour
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -89,7 +90,7 @@ export default function PicklistSuggestionsPage() {
     });
   }, [visibleItems, isAdmin, allPicklists]);
 
-  const review = async (item, approved, reason = '') => {
+  const review = async (item, approved, reason = '', existingValue = '') => {
     setReviewingId(item.id);
     try {
       const corrected = (editValues[item.id] || '').trim();
@@ -97,12 +98,17 @@ export default function PicklistSuggestionsPage() {
         id: item.id, approved,
         correctedValue: corrected && corrected !== item.value ? corrected : '',
         rejectionReason: reason,
+        existingValue,
         reviewerId: currentUser?.id || '', reviewerName: currentUser?.name || '',
       });
-      showToast(res.warning ? res.warning : (approved ? 'Approved — now live in the picklist' : 'Rejected'));
+      showToast(res.warning ? res.warning
+        : approved ? 'Approved — now live in the picklist'
+        : res.caseUpdated ? `Rejected — case updated to "${existingValue}"`
+        : 'Rejected');
       setEditValues(v => { const next = { ...v }; delete next[item.id]; return next; });
       setRejectingId(0);
       setRejectReason('');
+      setRejectExistingValue('');
       await refresh(status);
     } catch (err) {
       showToast(err.message || 'Could not save review. Please try again.');
@@ -114,10 +120,16 @@ export default function PicklistSuggestionsPage() {
   // Reject is two steps: clicking the button opens an inline reason box
   // (startReject) instead of rejecting immediately — the agent who
   // suggested it needs to see WHY, not just that it was turned down.
-  const startReject = (item) => { setRejectingId(item.id); setRejectReason(''); };
+  const startReject = (item) => { setRejectingId(item.id); setRejectReason(''); setRejectExistingValue(''); };
   const confirmReject = (item) => {
     if (!rejectReason.trim()) return;
-    review(item, false, rejectReason.trim());
+    review(item, false, rejectReason.trim(), rejectExistingValue);
+  };
+  // Picking an existing value prefills a sensible reason — still editable
+  // before confirming, in case the TL wants to word it differently.
+  const pickExistingForReject = (value) => {
+    setRejectExistingValue(value);
+    if (value) setRejectReason(`Already covered by "${value}" — please use that instead.`);
   };
 
   return (
@@ -225,7 +237,19 @@ export default function PicklistSuggestionsPage() {
                   {isAdmin && status === 'pending' && (
                     <td>
                       {rejectingId === it.id ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
+                          {existingForList.length > 0 && (
+                            <select
+                              value={rejectExistingValue}
+                              onChange={e => pickExistingForReject(e.target.value)}
+                              style={{ fontSize: 12 }}
+                            >
+                              <option value="">— This is a duplicate of… (optional) —</option>
+                              {[...existingForList].sort((a, b) => a.localeCompare(b)).map(v => (
+                                <option key={v} value={v}>{v}</option>
+                              ))}
+                            </select>
+                          )}
                           <input
                             type="text" autoFocus placeholder="Why is this rejected?"
                             value={rejectReason} onChange={e => setRejectReason(e.target.value)}

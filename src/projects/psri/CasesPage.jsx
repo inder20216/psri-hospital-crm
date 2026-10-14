@@ -128,7 +128,7 @@ function SearchableSelect({ value, onChange, options, placeholder = '— Select 
 // string) and/or suggest it as a new picklist value. The suggestion is
 // usable on this case immediately — approval only controls whether it
 // becomes a selectable option for future agents (confirmed with the user).
-function ProcedureNameField({ value, onChange, options, agentId, agentName, onToast, caseSummary }) {
+function ProcedureNameField({ value, onChange, options, agentId, agentName, onToast, caseSummary, caseId }) {
   const [search, setSearch]   = useState('');
   const [open, setOpen]       = useState(false);
   const [polishing, setPolishing] = useState(false);
@@ -172,7 +172,7 @@ function ProcedureNameField({ value, onChange, options, agentId, agentName, onTo
       // actual clinical context (not just a bare value) when deciding
       // whether "Teeth Surgery" is genuinely new or really means "Dental
       // Surgery", which already exists.
-      const res = await psri.suggestPicklistValue({ listName: 'Name of Procedure', value: val, agentId, agentName, force, caseContext: caseSummary || '' });
+      const res = await psri.suggestPicklistValue({ listName: 'Name of Procedure', value: val, agentId, agentName, force, caseContext: caseSummary || '', caseId: caseId || '' });
       if (res?.needsConfirmation) {
         setConfirm({ similar: res.similar || [] });
         return;
@@ -1169,6 +1169,7 @@ export default function CasesPage() {
                     agentName={currentUser?.name || ''}
                     onToast={showToast}
                     caseSummary={form.summary}
+                    caseId={form.id}
                   />
                 </div>
               </div>

@@ -81,9 +81,9 @@ function ps_suggest(array $b): array {
     }
 
     $ins = $pdo->prepare(
-        "INSERT INTO picklist_suggestions (list_name, value, suggested_by, suggested_by_name, case_context) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO picklist_suggestions (list_name, value, suggested_by, suggested_by_name, case_context, case_id) VALUES (?, ?, ?, ?, ?, ?)"
     );
-    $ins->execute([$listName, $value, (string) ($b['agentId'] ?? ''), (string) ($b['agentName'] ?? ''), trim((string) ($b['caseContext'] ?? ''))]);
+    $ins->execute([$listName, $value, (string) ($b['agentId'] ?? ''), (string) ($b['agentName'] ?? ''), trim((string) ($b['caseContext'] ?? '')), trim((string) ($b['caseId'] ?? ''))]);
 
     return ['id' => (int) $pdo->lastInsertId(), 'message' => 'Suggested — pending approval'];
 }
@@ -104,6 +104,7 @@ function ps_list(string $status): array {
         'suggestedBy'      => $r['suggested_by'],
         'suggestedByName'  => $r['suggested_by_name'],
         'caseContext'      => $r['case_context'] ?? '',
+        'caseId'           => $r['case_id'] ?? '',
         'rejectionReason'  => $r['rejection_reason'] ?? '',
         'status'           => $r['status'],
         'reviewedBy'       => $r['reviewed_by'],
@@ -121,6 +122,17 @@ function ps_list(string $status): array {
  * submitted it sees the corrected version, not their original typo. A
  * correction sent alongside a rejection is ignored — rejecting means "no",
  * not "approve this edited version".
+ *
+ * On reject, a reviewer can instead point at an EXISTING picklist value
+ * that already covers this ("it's really just Dental Surgery") via
+ * $b['existingValue'] — nothing gets added to the picklist (rejecting never
+ * pushes anything live), but if this suggestion came from a case that was
+ * already saved at the time it was suggested (case_id set), that case's own
+ * Name of Procedure is corrected to the existing value automatically, so
+ * the case record doesn't end up pointing at text that will never be a
+ * selectable option. A suggestion made while creating a brand-new case has
+ * no case_id yet (the case didn't exist in the DB at suggest time), so
+ * there's nothing to correct — only the suggestion itself gets resolved.
  */
 function ps_review(array $b): array {
     $id = (int) ($b['id'] ?? 0);
@@ -143,6 +155,7 @@ function ps_review(array $b): array {
     $finalValue = ($approved && $correctedValue !== '') ? $correctedValue : $row['value'];
     $rejectionReason = trim((string) ($b['rejectionReason'] ?? ''));
     if (!$approved && $rejectionReason === '') return ['error' => 'A rejection reason is required'];
+    $existingValue = !$approved ? trim((string) ($b['existingValue'] ?? '')) : '';
 
     $pdo->prepare('UPDATE picklist_suggestions SET status = ?, value = ?, rejection_reason = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = NOW() WHERE id = ?')
         ->execute([$status, $finalValue, $approved ? '' : $rejectionReason, $reviewerId, $reviewerName, $id]);
@@ -161,5 +174,15 @@ function ps_review(array $b): array {
         }
     }
 
-    return ['id' => $id, 'value' => $finalValue, 'message' => $approved ? 'Suggestion approved' : 'Suggestion rejected', 'warning' => $pushWarning];
+    $caseUpdated = false;
+    if ($existingValue !== '' && !empty($row['case_id']) && $row['list_name'] === 'Name of Procedure') {
+        $upd = $pdo->prepare('UPDATE cases SET name_of_procedure = ? WHERE case_id = ?');
+        $upd->execute([$existingValue, $row['case_id']]);
+        $caseUpdated = $upd->rowCount() > 0;
+    }
+
+    return [
+        'id' => $id, 'value' => $finalValue, 'caseUpdated' => $caseUpdated,
+        'message' => $approved ? 'Suggestion approved' : 'Suggestion rejected', 'warning' => $pushWarning,
+    ];
 }
