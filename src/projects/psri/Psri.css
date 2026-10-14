@@ -913,6 +913,10 @@ body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
 .psri-bot-steps { list-style: none; margin: 11px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
 .psri-bot-steps li { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; color: var(--psri-text-2); }
 .psri-bot-steps strong { color: var(--psri-text); font-weight: 700; }
+/* Reference answers are prose, not steps. */
+.psri-bot-lines { margin: 11px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.psri-bot-line { margin: 0; font-size: 13px; line-height: 1.55; color: var(--psri-text-2); padding-left: 11px; border-left: 2px solid var(--psri-primary-lt); }
+.psri-bot-line strong { color: var(--psri-text); font-weight: 700; }
 .psri-bot-n {
   flex: 0 0 auto;
   width: 18px; height: 18px;
