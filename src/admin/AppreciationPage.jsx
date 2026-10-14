@@ -11,7 +11,10 @@ const STATUS_TABS = [
 ];
 
 export default function AppreciationPage() {
-  const { currentUser } = useAuth();
+  // Admin / Super Admin (TL) audit and approve. Everyone else sees only the
+  // appreciations on their own cases, read-only — the same split as the
+  // Picklist Suggestions page.
+  const { currentUser, isAdmin } = useAuth();
   const [status, setStatus] = useState('pending');
   const [cases, setCases]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,10 +28,10 @@ export default function AppreciationPage() {
     setLoading(true);
     setLoadErr('');
     return psri.getAppreciationList(s)
-      .then(setCases)
+      .then(list => setCases(isAdmin ? list : list.filter(c => c.assignedTo === currentUser?.id)))
       .catch(() => setLoadErr('Could not load appreciation cases. Please try again.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isAdmin, currentUser]);
 
   useEffect(() => { refresh(status); }, [status, refresh]);
 
@@ -49,8 +52,12 @@ export default function AppreciationPage() {
     <div className="admin-page">
       <div className="admin-top">
         <div>
-          <h1 className="admin-title">Appreciation Review</h1>
-          <p className="admin-subtitle">Audit the call recording behind each "Appreciation Received" case and approve or reject it.</p>
+          <h1 className="admin-title">{isAdmin ? 'Appreciation Review' : 'My Appreciations'}</h1>
+          <p className="admin-subtitle">
+            {isAdmin
+              ? 'Audit the call recording behind each "Appreciation Received" case and approve or reject it.'
+              : 'Appreciations logged on your cases, and whether your team leader has approved them.'}
+          </p>
         </div>
       </div>
 
@@ -110,6 +117,7 @@ export default function AppreciationPage() {
               {c.callDurationSeconds != null && (
                 <span style={{ fontSize: 12, color: '#94a3b8' }}>{Math.round(c.callDurationSeconds / 60)}m {c.callDurationSeconds % 60}s</span>
               )}
+              {isAdmin && (
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
                 <button
                   className="admin-btn-primary"
@@ -127,6 +135,7 @@ export default function AppreciationPage() {
                   No, Reject
                 </button>
               </div>
+              )}
             </div>
           </div>
         ))

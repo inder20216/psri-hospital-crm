@@ -49,6 +49,15 @@ The base path is `/psri-hospital-crm/` in a production build and `/` in dev —
 `vite.config.js` switches on the command, so MSAL's redirect URI (origin +
 `BASE_URL`) matches what Azure has registered for each.
 
+**Open the dev app at `http://localhost:5200/`, not `127.0.0.1`.** Azure only
+has `localhost` registered as a redirect URI, so a `127.0.0.1` sign-in fails with
+`AADSTS50011`. Two guards cover this:
+
+- `src/main.jsx` redirects any `127.0.0.1` visit to `localhost` before MSAL starts;
+- `vite.config.js` calls `dns.setDefaultResultOrder('ipv4first')`, so the dev
+  server listens on `127.0.0.1` rather than only on IPv6 `::1` (which some
+  browsers never try for `localhost`).
+
 > `build.cssTarget` is pinned so the CSS minifier keeps classic
 > `@media (max-width: …)` queries instead of rewriting them to the modern
 > `(width <= …)` range form. Older phone browsers silently drop range syntax,
@@ -87,6 +96,7 @@ documents how to switch back to `php -S localhost:8000`.
 | MySQL (`psri` DB) | `workflows` + `workflow_runs`, `new_contacts` / `new_cases` lists |
 | PHP API (`PSRI/Workflows/php/api.php`) | Workflow designer store + runner (replaced the n8n workflow webhooks) |
 | MySQL (`cases` table) | Repeat detection — `wf_repeat_info()` in `runner.php` |
+| OpenAI-compatible chat API (`support_ai.php`) | The Support assistant's AI fallback, grounded on `support_kb.md` |
 | n8n (`automation.openmindhelpline.com`) | The remaining API workflows (cases, contacts, telephony) |
 
 ---
@@ -96,6 +106,9 @@ documents how to switch back to `php -S localhost:8000`.
 | What | Where |
 |---|---|
 | PSRI pages | `src/projects/psri/` |
+| Shared "Open on phone" QR | `src/projects/psri/PhoneQrButton.jsx` |
+| Support assistant + its content | `src/projects/psri/SupportBot.jsx`, `supportContent.js` |
+| Support KB generator | `scripts/build-support-kb.mjs` → `PSRI/Workflows/php/support_kb.md` |
 | API layer | `src/api/psri.js` |
 | Auth (MSAL) | `src/auth/msalConfig.js` |
 | Shell | `src/App.jsx`, `src/components/ProjectRail.jsx` |
@@ -105,6 +118,34 @@ documents how to switch back to `php -S localhost:8000`.
 | Process doc | `PSRI/PSRI_PROCESS.md` |
 | Workflow PHP runner | `PSRI/Workflows/php/` |
 | Deploy scripts | `PSRI/Workflows/php/deploy/` |
+
+---
+
+## Responsive layout (phone / small tablet)
+
+One breakpoint for the whole app: **`max-width: 768px`** (`COMPACT_QUERY` in
+`ProjectRail.jsx`, and the `@media` block at the end of each stylesheet). It is
+kept under 780px on purpose — a 1366px laptop at 175% scaling is ~780 CSS px and
+keeps its desktop rail.
+
+At ≤ 768px:
+
+- **Rail → drawer.** A 56px top bar with **☰** opens the rail as a labelled
+  slide-in drawer; picking a page, tapping the backdrop or **Esc** closes it.
+- **Floating widgets move out of the way.** Doctor Lookup + Chat buttons sit on
+  the right of the top bar; the Missed Calls bar sits bottom-left (its list opens
+  upwards) and the SparkTG phone button bottom-right. Every panel (chat, doctor
+  lookup, dialer, SparkTG, debug) spans the screen width.
+- **Pages:** 16px padding, headers and filters wrap, search takes a full line,
+  form fields go one per row, detail grids one column, tables scroll sideways,
+  dialogs fill the width, inputs are 16px (stops iOS zoom-on-focus).
+- **Workflow editor** stacks palette / canvas / panel and scrolls.
+- **Login** stacks the brand panel above the sign-in box.
+
+The WhatsApp page's own full-screen phone mode (`body.psri-wa-focus`, below)
+still applies on top of this on a real touch phone.
+
+Check it in the browser with **F12 → Ctrl+Shift+M** (device toolbar).
 
 ---
 
@@ -209,7 +250,8 @@ on what counts as a repeat.
 
 | File | Role |
 |---|---|
-| `src/projects/psri/WhatsAppListPage.jsx` | The page: templates, filters, Copied, Repeated query, QR dialog |
+| `src/projects/psri/WhatsAppListPage.jsx` | The page: templates, filters, Copied, Repeated query |
+| `src/projects/psri/PhoneQrButton.jsx` | The **📱 Open on phone** button + QR dialog (shared with Prospects) |
 | `src/projects/psri/waNotifications.js` | `WA_TEMPLATES` (1–4), `caseTemplates`, `buildWaMessage` |
 | `src/projects/psri/whatsappGroups.js` | Department routing, group link resolution, message builder |
 | `src/projects/psri/repeatCalls.js` | Repeat matching rule + `buildRepeatIndex` |
@@ -303,6 +345,160 @@ Anyone holding it can post to your channel, so:
 
 ---
 
+## Prospects page
+
+Route `/psri/prospects` — unconverted "Enquiry or Transfer" leads, one row per
+contact.
+
+### Tabs (Admin / Super Admin)
+
+| Tab | Shows |
+|---|---|
+| **New** | No lead status set yet (untouched) |
+| **New assigned** | Untouched **and** already assigned to an agent — the queue that goes quiet |
+| **Other** | Everything with a lead status (in progress) |
+
+**New assigned** deliberately overlaps **New**: a lead can be both fresh and
+assigned. "New" keeps its old meaning; "New assigned" is the subset with an owner
+to chase. Each tab shows a live count, and the bulk quick-select works on both
+New tabs. Agents see no tabs — just their own leads, untouched ones first.
+
+### Date filter
+
+Applies to every tab and survives a tab change, so the counts always reflect the
+chosen range.
+
+- Pick the date to filter on: **Created**, **First call**, **Last call**,
+  **Next call**.
+- **From / To** (the To day is inclusive), or a preset: **Today**, **7 days**,
+  **30 days**; **✕ Clear** resets.
+- A prospect with **no value** for the chosen field drops out — "next call this
+  week" must not return leads with no next call booked.
+- MySQL dates (`YYYY-MM-DD HH:MM:SS`) are parsed explicitly; `new Date()` on that
+  shape is local time in some browsers and UTC in others, which shifts a day at
+  the edges.
+
+**📱 Open on phone** sits beside the tabs (the same component as the WhatsApp
+page, see below).
+
+### "Open on phone" — shared component
+
+`PhoneQrButton.jsx` is used by both the WhatsApp Notifications page and
+Prospects. It encodes the page the admin is looking at; in local dev
+(`localhost` / `127.0.0.1`) it swaps in the GitHub Pages origin, since a phone
+can't reach your laptop's localhost. **Copy link** falls back to a hidden
+textarea when the async clipboard is blocked; **Esc** closes the dialog.
+
+---
+
+## Support page
+
+Route `/psri/support` — the 🎧 **Support** rail item, below WhatsApp. Visible to
+everyone.
+
+The page is **just a chat assistant** (`SupportBot.jsx`). It answers from
+`supportContent.js` — the single copy of the help wording:
+
+- `TUTORIAL` — how-to guides with numbered steps (create a case, take an incoming
+  call, send a WhatsApp alert, work / assign prospects, download data, set up an
+  automation, …);
+- `REFERENCE` — what things mean (statuses, Type of Call vs Call For, the repeat
+  rule, desk routing, roles, the prospect tabs, Teams alerts, troubleshooting,
+  sign-in, patient-data rules, …).
+
+### How a question is answered
+
+1. **Written guides first — instant, offline.** `findTopic()` scores each topic
+   by keyword matches (longer keywords weigh more; scattered multi-word matches
+   score 0.75; one typo per word scores 0.6). The question's intent ("how do I…"
+   vs "what is…") favours guides or reference notes.
+2. **No match → AI fallback** (`POST psri-support-ask`, `support_ai.php`). The
+   server sends the question, the last 5 exchanges, and **its own**
+   `support_kb.md` to an OpenAI-compatible chat API, told to answer only from
+   that documentation (Hindi or English, under 150 words) and to reply
+   `NOT_DOCUMENTED` otherwise — which the bot shows as "not covered yet" instead
+   of guessing.
+3. A guide card picked for a typed question also offers **Not quite? Get a
+   direct answer**, which sends that question to the AI.
+
+If the AI isn't configured or is unreachable, the bot says so and points to the
+tutorial; it never shows the provider's name or raw errors.
+
+### Tutorial mode
+
+**📚 Tutorial** (header button) lists every how-to guide in order. Each guide
+card has **Next guide: … →**, so a new agent can go through the whole CRM step
+by step; the last one says the tutorial is done.
+
+### One source of truth for the wording
+
+`supportContent.js` is the only place help text is written.
+`scripts/build-support-kb.mjs` turns it into `PSRI/Workflows/php/support_kb.md`
+— run by `prebuild`, so every `npm run build` / `npm run deploy` refreshes it.
+**Commit the regenerated `support_kb.md` and redeploy the PHP** after editing the
+guides, or the AI answers from the old text.
+
+The server never accepts documentation from the browser: a caller-supplied
+"context" would let anyone use the endpoint as a free general-purpose AI.
+
+### Setting up the AI fallback
+
+In `config.php` on the server (or the `PSRI_OPENAI_API_KEY` /
+`PSRI_OPENAI_MODEL` / `PSRI_OPENAI_BASE_URL` env vars):
+
+```php
+'support' => [
+    'api_key'  => '<key>',              // blank = guides only
+    'model'    => 'gpt-4.1-mini',
+    'base_url' => 'https://api.openai.com/v1',
+],
+```
+
+The route is unauthenticated, so set a **spend limit** on the AI account. Each
+call is about 4k input tokens (the guides) + up to 700 output.
+
+**Check it from the server** (the upstream call allows 45 s, via
+`wf_http()`'s optional timeout):
+
+```bash
+php api.php support-ask "what is a case?"
+```
+
+A covered question prints the answer; one the guides don't cover
+prints `(not in the documentation)`; a missing key or unreachable
+endpoint prints `ai-not-configured` / `ai-unavailable`.
+
+**To add or change an answer, edit `supportContent.js`** — add a topic with
+`keywords`, ask the bot a few phrasings to check it is picked, then
+`npm run support-kb` and commit `support_kb.md`.
+
+---
+
+## Picklist Suggestions (review)
+
+Agents can suggest a new **Name of Procedure** from the case form; a TL / Admin
+approves or rejects it under Admin → Picklist Suggestions
+(`src/admin/PicklistSuggestionsPage.jsx`, `PSRI/Workflows/php/picklist_suggestions.php`).
+
+What the reviewer now gets:
+
+- **Case context** — the case's Summary is sent with the suggestion
+  (`caseContext`), so the TL isn't judging a bare word.
+- **AI duplicate hint** — the same `psri-procedure-polish` check the case form
+  uses flags semantic duplicates (Teeth Surgery → Dental Surgery) with a one-click
+  "use this instead".
+- **Show existing values** — a per-row, searchable, sorted list of everything
+  already in that picklist. This is the check that always works, even when the AI
+  hint is down.
+- **Reject needs a reason** — Reject opens an inline reason box; the server
+  refuses a rejection without one. The reason is shown to the admin and to the
+  agent who suggested it.
+
+**Database:** this needs two columns no migration creates (see
+[Deployment](#deployment)).
+
+---
+
 ## Deployment
 
 ### Frontend (GitHub Pages)
@@ -334,11 +530,25 @@ Both bundles are flat with forward slashes — a zip written with Windows'
 `Compress-Archive` uses backslashes, which `unzip` on Linux treats as literal
 characters in filenames and scatters `php\api.php` across the folder.
 
+### Database columns for Picklist Suggestions (manual, one-off)
+
+`psri_migrate()` does **not** create the `picklist_suggestions` table, so the
+installer's migrate step won't add the new columns. Until they exist, suggesting
+a value (the `INSERT` names `case_context`) and rejecting one (the `UPDATE` sets
+`rejection_reason`) fail. Run once on the `psri` DB:
+
+```sql
+ALTER TABLE picklist_suggestions
+  ADD COLUMN case_context     TEXT NULL,
+  ADD COLUMN rejection_reason TEXT NULL;
+```
+
 ### `config.php` (gitignored, never committed)
 
-Holds the DB credentials, the WhatsApp Cloud API token + verify token, and now
-`teams.webhook_url`. Copy `config.example.php` to fill one in, or set the
-`PSRI_*` environment variables instead.
+Holds the DB credentials, the WhatsApp Cloud API token + verify token,
+`teams.webhook_url`, and the Support assistant's OpenAI key
+(`support.api_key`). Copy `config.example.php` to fill one in, or set
+the `PSRI_*` environment variables instead.
 
 ---
 
@@ -348,11 +558,16 @@ Live and working:
 
 - the WhatsApp Notifications page, its four templates, Copied list, Repeated
   query tab, **Send in group**, and the phone/QR view;
-- the workflow designer, including the Teams channel and the new condition fields.
+- the workflow designer, including the Teams channel and the new condition fields;
+- Prospects: the date filter, the **New assigned** tab and the phone QR;
+- the **Support** page: guide answers and **📚 Tutorial** mode
+  (the AI fallback goes live with the PHP below);
 
 Done and committed, **waiting on the server**:
 
 - the PHP carrying `wf_repeat_info()` and the Teams channel;
+- the Picklist Suggestions changes (case context, required rejection reason) —
+  the PHP **plus** the two DB columns above;
 - therefore the **Repeated query → Teams** workflow itself — its JSON lives in
   the database, so it can only be created after the code is deployed.
 
@@ -364,6 +579,16 @@ Known blockers:
   `…/psri-api/psri-wa-webhook`.
 - No desk → conversation mapping in Admin → Picklists → "WhatsApp Groups", so
   in-CRM group conversations have no target yet.
+- `psri-procedure-polish` (the AI typo / duplicate check) returns **HTTP 200 with
+  an empty body** for every request — a fault on the automation side, not in this
+  code. Until it's fixed, the AI duplicate hint never appears; reviewers should
+  use **Show existing values**.
+
+Support AI fallback — **waiting on the server**:
+
+- deploy `support_ai.php` + `support_kb.md` (the installer now fetches both) and
+  add the `support` key to `config.php`. Until then the bot answers from the
+  guides only and says detailed answers aren't available.
 
 ---
 
@@ -381,6 +606,10 @@ matching the alert template wording).
 > Renaming the widget to match is a one-line change if wanted.
 
 A case can match **more than one** department, so every match gets its own row.
+
+**Admin / Super Admin only.** Agents don't see the card (`isAdmin` gate in
+`CasesPage.jsx`), the same as the WhatsApp Notifications page, whose rail button
+and route are admin-only too.
 
 ### Routing rules
 

@@ -58,7 +58,7 @@ export const TUTORIAL = [
     key: 'whatsapp-alert',
     label: 'Send a WhatsApp alert',
     icon: '💬',
-    who: 'Everyone',
+    who: 'Admin, Super Admin',
     keywords: ['whatsapp', 'alert', 'send whatsapp', 'copy message', 'send in group', 'group', 'notification', 'qr code', 'qr', 'open on phone', 'phone', 'desk', 'message the desk'],
     steps: [
       'Open **WhatsApp** in the left rail — every case that needs a message is listed under its notification type.',
@@ -320,8 +320,8 @@ export const REFERENCE = [
     icon: '🔐',
     keywords: ['role', 'roles', 'role difference', 'what is a role', 'agent vs admin', 'difference between agent and admin', 'agent and admin', 'who can see', 'permissions', 'agent role', 'admin role', 'super admin', 'access', 'tl', 'team leader', 'who is admin'],
     lines: [
-      '**Agent** — their own work: cases, contacts, prospects assigned to them, and the WhatsApp list.',
-      '**Admin (TL/Manager)** — additionally every prospect, **Productivity**, **Reports** and **Appreciation**.',
+      '**Agent** — their own work: cases, contacts, prospects assigned to them, **Suggestions** and **Appreciation** (the status of their own).',
+      '**Admin (TL/Manager)** — additionally every prospect, the **WhatsApp** list, **Productivity**, **Reports**, and approving **Appreciation** and **Suggestions**.',
       '**Super Admin** — additionally **Settings** (Users, Picklists, Dependencies, Workflows).',
       'Settings sits at the very bottom of the rail, so you will not find it above Suggestions.',
     ],
@@ -430,7 +430,7 @@ export const REFERENCE = [
     keywords: ['appreciation flow', 'who approves appreciation', 'scoreboard', 'appreciation status', 'appreciation review'],
     lines: [
       'An agent ticks **Appreciation Received** on a case and writes what was said.',
-      'It sits as pending until an admin reviews it under **Appreciation**.',
+      'It sits as pending until an admin reviews it under **Appreciation**. Agents can open **Appreciation** too, to see the status of the ones on their own cases.',
       'Approved entries count towards the scoreboard; rejected ones do not.',
     ],
   },
@@ -486,7 +486,7 @@ export const REFERENCE = [
     icon: '🔍',
     keywords: ['where is my tab', 'tab missing', 'cannot see settings', 'cannot see productivity', 'option not showing', 'not visible', 'permission denied'],
     lines: [
-      'Each tab belongs to a role — **Productivity**, **Reports** and **Appreciation** need Admin; **Settings** needs Super Admin.',
+      'Each tab belongs to a role — **WhatsApp**, **Productivity** and **Reports** need Admin; **Settings** needs Super Admin. **Appreciation** and **Suggestions** are there for everyone.',
       'Settings sits at the **bottom** of the rail, below Suggestions, not at the top.',
       'On the WhatsApp page the rail is hidden on a phone by design; turn the phone sideways or use a laptop.',
       'A browser zoomed right out can also push narrow controls off screen.',

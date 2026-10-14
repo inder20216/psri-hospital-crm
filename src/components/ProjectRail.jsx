@@ -8,6 +8,22 @@ import './ProjectRail.css';
 
 const SUGGESTIONS_POLL_MS = 60000;
 
+// Below this width the rail turns into a slide-in drawer behind a top bar
+// (ProjectRail.css uses the same number). Kept under 780px on purpose: a
+// 1366px laptop at 175% scaling is ~780 CSS px and should keep its rail.
+const COMPACT_QUERY = '(max-width: 768px)';
+
+function useCompact() {
+  const [compact, setCompact] = useState(() => typeof window !== 'undefined' && window.matchMedia(COMPACT_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(COMPACT_QUERY);
+    const onChange = () => setCompact(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return compact;
+}
+
 function initials(name) {
   return (name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('');
 }
@@ -17,6 +33,23 @@ export default function ProjectRail() {
   const { currentUser, isSuperAdmin, isAdmin, logout } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [suggestionCount, setSuggestionCount] = useState(0);
+  const compact = useCompact();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // The drawer always shows labels — there is no room-saving reason to hide them.
+  const labels = expanded || compact;
+
+  // Picking a page closes the drawer. Adjusting state during render (not in an
+  // effect) is React's recommended way to react to a prop/route change.
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) { setLastPath(pathname); setDrawerOpen(false); }
+
+  // Esc closes the drawer.
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setDrawerOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
 
   // Admin: how many need a decision right now. Everyone else: how many of
   // THEIR OWN suggestions got resolved (approved/rejected) since they last
@@ -45,10 +78,29 @@ export default function ProjectRail() {
     : PROJECTS.filter(p => p.id === 'psri');
 
   return (
-    <aside className={`rail ${expanded ? 'expanded' : ''}`}>
+    <>
+    {/* Phone / small-tablet top bar — hidden by CSS on wider screens. The
+        right-hand side stays empty: the floating Doctor Lookup and Chat
+        buttons sit there. */}
+    <header className="rail-topbar">
+      <button
+        type="button"
+        className="rail-burger"
+        onClick={() => setDrawerOpen(o => !o)}
+        aria-label={drawerOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={drawerOpen}
+      >
+        {drawerOpen ? '✕' : '☰'}
+      </button>
+      <div className="rail-logo">UC</div>
+      <div className="rail-topbar-brand">PSRI CRM</div>
+    </header>
+    {compact && drawerOpen && <div className="rail-backdrop" onClick={() => setDrawerOpen(false)} />}
+
+    <aside className={`rail ${expanded ? 'expanded' : ''} ${drawerOpen ? 'open' : ''}`}>
       <div className="rail-top">
         <div className="rail-logo">UC</div>
-        {expanded && <div className="rail-brand">Universal CRM</div>}
+        {labels && <div className="rail-brand">Universal CRM</div>}
       </div>
 
       <div className="rail-projects">
@@ -63,9 +115,9 @@ export default function ProjectRail() {
                 title={p.name}
               >
                 <span className="rail-icon">{p.icon}</span>
-                {expanded && <span className="rail-label">{p.name}</span>}
+                {labels && <span className="rail-label">{p.name}</span>}
               </Link>
-              {expanded && isActiveProject && p.modules.filter(m => !m.hidden).length > 0 && (
+              {labels && isActiveProject && p.modules.filter(m => !m.hidden).length > 0 && (
                 <div className="rail-submodules">
                   {p.modules.filter(m => !m.hidden).map(mod => (
                     <Link
@@ -87,22 +139,24 @@ export default function ProjectRail() {
         {isSuperAdmin && (
           <button className="rail-item rail-add" title="Add a new project (coming soon)">
             <span className="rail-icon">+</span>
-            {expanded && <span className="rail-label">Add Project</span>}
+            {labels && <span className="rail-label">Add Project</span>}
           </button>
         )}
       </div>
 
       <div className="rail-bottom">
-        {/* WhatsApp notification list — top of the rail tools */}
-        <Link
-          to="/psri/whatsapp"
-          className={`rail-item ${pathname === '/psri/whatsapp' ? 'active' : ''}`}
-          style={{ '--rail-color': '#25d366' }}
-          title="WhatsApp Notifications"
-        >
-          <span className="rail-icon">💬</span>
-          {expanded && <span className="rail-label">WhatsApp</span>}
-        </Link>
+        {/* WhatsApp notification list — Admin and Super Admin only */}
+        {isAdmin && (
+          <Link
+            to="/psri/whatsapp"
+            className={`rail-item ${pathname === '/psri/whatsapp' ? 'active' : ''}`}
+            style={{ '--rail-color': '#25d366' }}
+            title="WhatsApp Notifications"
+          >
+            <span className="rail-icon">💬</span>
+            {labels && <span className="rail-label">WhatsApp</span>}
+          </Link>
+        )}
 
         {/* Support — help with the CRM, below WhatsApp */}
         <Link
@@ -112,7 +166,7 @@ export default function ProjectRail() {
           title="Support"
         >
           <span className="rail-icon">🎧</span>
-          {expanded && <span className="rail-label">Support</span>}
+          {labels && <span className="rail-label">Support</span>}
         </Link>
 
         {/* Productivity dashboard — Admin and Super Admin (TL/Manager) */}
@@ -124,7 +178,7 @@ export default function ProjectRail() {
             title="Agent Productivity"
           >
             <span className="rail-icon">📊</span>
-            {expanded && <span className="rail-label">Productivity</span>}
+            {labels && <span className="rail-label">Productivity</span>}
           </Link>
         )}
 
@@ -137,20 +191,21 @@ export default function ProjectRail() {
             title="Reports"
           >
             <span className="rail-icon">🧾</span>
-            {expanded && <span className="rail-label">Reports</span>}
+            {labels && <span className="rail-label">Reports</span>}
           </Link>
         )}
 
-        {/* Appreciation audit/approval — Admin and Super Admin (TL) */}
-        {isAdmin && (
+        {/* Appreciation — Admin/Super Admin (TL) audit and approve; every other
+            user sees the status of the appreciations on their own cases. */}
+        {currentUser && (
           <Link
             to="/admin/appreciation"
             className={`rail-item ${pathname === '/admin/appreciation' ? 'active' : ''}`}
             style={{ '--rail-color': '#b45309' }}
-            title="Appreciation Review"
+            title={isAdmin ? 'Appreciation Review' : 'My Appreciations'}
           >
             <span className="rail-icon">🌟</span>
-            {expanded && <span className="rail-label">Appreciation</span>}
+            {labels && <span className="rail-label">Appreciation</span>}
           </Link>
         )}
 
@@ -176,7 +231,7 @@ export default function ProjectRail() {
                 </span>
               )}
             </span>
-            {expanded && <span className="rail-label">Suggestions</span>}
+            {labels && <span className="rail-label">Suggestions</span>}
           </Link>
         )}
 
@@ -190,9 +245,9 @@ export default function ProjectRail() {
               title="Settings"
             >
               <span className="rail-icon">⚙</span>
-              {expanded && <span className="rail-label">Settings</span>}
+              {labels && <span className="rail-label">Settings</span>}
             </Link>
-            {expanded && pathname.startsWith('/admin') && (
+            {labels && pathname.startsWith('/admin') && (
               <div className="rail-submodules">
                 <Link to="/admin/users" className={`rail-subitem ${pathname === '/admin/users' ? 'active' : ''}`}>
                   <span className="rail-subicon">👤</span><span>Users</span>
@@ -215,12 +270,12 @@ export default function ProjectRail() {
         {currentUser && (
           <button
             className="rail-item rail-user-btn"
-            title={expanded ? '' : `${currentUser.name}\n${currentUser.role}\nClick to sign out`}
+            title={labels ? '' : `${currentUser.name}\n${currentUser.role}\nClick to sign out`}
             onClick={logout}
             style={{ '--rail-color': '#0d9488', cursor: 'pointer' }}
           >
             <span className="rail-icon rail-avatar">{initials(currentUser.name)}</span>
-            {expanded && (
+            {labels && (
               <span className="rail-user-info">
                 <span className="rail-user-name">{currentUser.name}</span>
                 <span className="rail-user-role">{currentUser.role} · Sign out</span>
@@ -234,5 +289,6 @@ export default function ProjectRail() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

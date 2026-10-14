@@ -75,7 +75,8 @@
   background: white;
   border-radius: 14px;
   box-shadow: var(--admin-shadow);
-  overflow: hidden;
+  /* Scroll sideways rather than clip columns on a narrow window. */
+  overflow-x: auto;
 }
 .admin-table { width: 100%; border-collapse: collapse; }
 .admin-table th {
@@ -242,4 +243,22 @@
   font-weight: 600;
   box-shadow: var(--admin-shadow-lg);
   z-index: 2000;
+}
+
+/* ── PHONE / SMALL TABLET ────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .admin-page { padding: 16px 14px; }
+  .admin-top { flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+  .admin-title { font-size: 20px; }
+  .admin-table th, .admin-table td { padding: 10px 12px; }
+  .admin-table td { white-space: nowrap; }
+  .admin-form-fullpage { padding: 18px 16px; max-width: none; }
+  .admin-field { min-width: 0; flex-basis: 100%; }
+  /* 16px stops iOS zooming the page when a field is focused. */
+  .admin-field input, .admin-field select, .admin-page input, .admin-page select, .admin-page textarea { font-size: 16px; }
+  .admin-form-actions-sticky { flex-wrap: wrap; }
+  .admin-form-actions-sticky > button { flex: 1 1 auto; }
+  .picklist-grid { grid-template-columns: 1fr; }
+  .dep-add-form { grid-template-columns: 1fr; }
+  .admin-toast { left: 12px; right: 12px; top: 64px; }
 }

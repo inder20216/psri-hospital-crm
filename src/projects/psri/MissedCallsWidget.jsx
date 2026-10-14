@@ -139,7 +139,7 @@ export default function MissedCallsWidget() {
         </button>
 
         {listOpen && (
-          <div style={{
+          <div className="mc-list" style={{
             position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 50,
             background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
             boxShadow: '0 8px 24px rgba(0,0,0,0.12)', width: 340, maxHeight: 420, overflowY: 'auto',

@@ -27,18 +27,18 @@ import './App.css';
 function LoginScreen() {
   const { login } = useAuth();
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-      <div style={{
+    <div className="login-screen" style={{ minHeight: '100vh', display: 'flex', fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+      <div className="login-hero" style={{
         flex: '0 0 55%', background: 'linear-gradient(145deg, #0d4f4a 0%, #0d9488 60%, #0d4f4a 100%)',
         display: 'flex', flexDirection: 'column', padding: '56px 64px', position: 'relative', overflow: 'hidden',
       }}>
         <div style={{ position: 'absolute', top: -80, right: -80, width: 320, height: 320, borderRadius: '50%', background: 'rgba(20,184,166,.15)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: -60, left: -60, width: 240, height: 240, borderRadius: '50%', background: 'rgba(20,184,166,.10)', pointerEvents: 'none' }} />
-        <div style={{ marginBottom: 64, position: 'relative' }}>
+        <div className="login-hero-brand" style={{ marginBottom: 64, position: 'relative' }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>Open Mind Services</div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,.5)', marginTop: 4 }}>PSRI Hospital — CRM</div>
         </div>
-        <div style={{ position: 'relative', marginBottom: 48 }}>
+        <div className="login-hero-pitch" style={{ position: 'relative', marginBottom: 48 }}>
           <h1 style={{ fontSize: 36, fontWeight: 800, color: '#fff', lineHeight: 1.2, margin: '0 0 16px', maxWidth: 420 }}>
             Your hospital's patient helpline, fully organised
           </h1>
@@ -46,11 +46,11 @@ function LoginScreen() {
             Log calls, manage contacts, track cases, and coordinate with PSRI's clinical team — all in one place.
           </p>
         </div>
-        <div style={{ marginTop: 'auto', paddingTop: 48, fontSize: 11, color: 'rgba(255,255,255,.25)', position: 'relative' }}>
+        <div className="login-hero-foot" style={{ marginTop: 'auto', paddingTop: 48, fontSize: 11, color: 'rgba(255,255,255,.25)', position: 'relative' }}>
           Secured by Microsoft Entra ID &nbsp;·&nbsp; Open Mind Services Limited
         </div>
       </div>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', padding: '40px 32px' }}>
+      <div className="login-panel" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', padding: '40px 32px' }}>
         <div style={{ width: '100%', maxWidth: 380 }}>
           <div style={{ marginBottom: 36 }}>
             <h2 style={{ fontSize: 24, fontWeight: 800, color: '#134e4a', margin: '0 0 8px' }}>Sign in to PSRI CRM</h2>
@@ -125,7 +125,11 @@ function AppShell() {
                         <Route
                           key={mod.path}
                           path={`/${project.id}${mod.path}`}
-                          element={<main className="ucrm-main">{mod.element}</main>}
+                          // adminOnly modules (WhatsApp) bounce other users to
+                          // Contacts, so a typed or scanned URL can't reach them.
+                          element={mod.adminOnly && !isAdmin
+                            ? <Navigate to="/psri/contacts" replace />
+                            : <main className="ucrm-main">{mod.element}</main>}
                         />
                       ))
                     )}
@@ -142,9 +146,11 @@ function AppShell() {
                       <>
                         <Route path="/admin/productivity" element={<main className="ucrm-main"><ProductivityPage /></main>} />
                         <Route path="/admin/reports"       element={<main className="ucrm-main"><ReportsPage /></main>} />
-                        <Route path="/admin/appreciation"  element={<main className="ucrm-main"><AppreciationPage /></main>} />
                       </>
                     )}
+                    {/* Every signed-in user: Admins review here, everyone else sees
+                        their own appreciations read-only (the page gates the buttons). */}
+                    <Route path="/admin/appreciation" element={<main className="ucrm-main"><AppreciationPage /></main>} />
                     {/* Every signed-in user — not just Admins — can see the status of their
                         own suggestions here; the page itself gates the review controls. */}
                     <Route path="/admin/picklist-suggestions" element={<main className="ucrm-main"><PicklistSuggestionsPage /></main>} />
