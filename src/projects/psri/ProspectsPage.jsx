@@ -167,7 +167,7 @@ export default function ProspectsPage() {
   const [bulkAssignTo, setBulkAssignTo]   = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [remarksOpenId, setRemarksOpenId] = useState(''); // which card's remarks popover is open, if any — agents only, admin sees remarks inline
-  const [adminTab, setAdminTab]           = useState('New'); // Admin/Super Admin only: 'New' | 'New assigned' | 'Other'
+  const [adminTab, setAdminTab]           = useState(isAdmin ? 'New' : 'New assigned'); // Admin: 'New' | 'New assigned' | 'Other'. Agent: 'New assigned' | 'Followup Due'
   const [quickSelectCount, setQuickSelectCount] = useState('');
   // Date filter — applied to every tab, so it survives a tab change.
   const [dateField, setDateField]     = useState('created');
@@ -225,11 +225,29 @@ export default function ProspectsPage() {
   // has an owner to chase.
   const isNewAssignedLead = (p) => !p.leadStatus && !!p.assignedTo;
 
+  // A follow-up is "due" the moment its date arrives, not only at the exact
+  // time of day — an agent checking in the morning should see everything
+  // due today, not just what's already past its scheduled hour.
+  const isFollowupDue = (p) => {
+    const d = parseWhen(p.nextCallAt);
+    if (!d) return false;
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    return d <= endOfToday;
+  };
+
   const ADMIN_TABS = [
     { key: 'New',          label: 'New',          test: isNewLead },
     { key: 'New assigned', label: 'New assigned', test: isNewAssignedLead },
     { key: 'Other',        label: 'Other',        test: (p) => !isNewLead(p) },
   ];
+
+  const AGENT_TABS = [
+    { key: 'New assigned', label: 'New Assigned', test: isNewAssignedLead },
+    { key: 'Followup Due', label: 'Followup Due', test: isFollowupDue },
+  ];
+
+  const TABS = isAdmin ? ADMIN_TABS : AGENT_TABS;
 
   // Keeps a prospect when its chosen date sits inside the range. A prospect with
   // no value for the chosen field drops out — asking for "next call this week"
@@ -258,19 +276,19 @@ export default function ProspectsPage() {
   }, [prospects, isAdmin, currentUser, withinRange]);
 
   const tabCounts = useMemo(() => Object.fromEntries(
-    ADMIN_TABS.map(t => [t.key, inScope.filter(t.test).length]),
-  ), [inScope]);
+    TABS.map(t => [t.key, inScope.filter(t.test).length]),
+  ), [inScope, TABS]);
 
   const visibleProspects = useMemo(() => {
-    if (isAdmin) {
-      const tab = ADMIN_TABS.find(t => t.key === adminTab);
-      return tab ? inScope.filter(tab.test) : inScope;
+    const tab = TABS.find(t => t.key === adminTab);
+    const filtered = tab ? inScope.filter(tab.test) : inScope;
+    if (!isAdmin && adminTab === 'Followup Due') {
+      // Soonest/most-overdue due date first — that's the order an agent
+      // actually wants to work through them in.
+      return [...filtered].sort((a, b) => (parseWhen(a.nextCallAt) || 0) - (parseWhen(b.nextCallAt) || 0));
     }
-    // Stable sort (spec-guaranteed since ES2019) — New-leads partition moves
-    // to the front, already-attempted ones follow, each group keeping its
-    // existing relative order.
-    return [...inScope].sort((a, b) => (isNewLead(a) === isNewLead(b)) ? 0 : (isNewLead(a) ? -1 : 1));
-  }, [inScope, isAdmin, adminTab]);
+    return filtered;
+  }, [inScope, isAdmin, adminTab, TABS]);
 
   const applyPreset = (preset) => {
     if (!preset) { setDateFrom(''); setDateTo(''); setDatePreset(''); return; }
@@ -442,28 +460,28 @@ export default function ProspectsPage() {
 
       <div className="psri-layout">
         <div className="psri-list">
-          {isAdmin && (
-            <div className="psri-tabs">
-              {ADMIN_TABS.map(tab => (
-                <button
-                  key={tab.key}
-                  type="button"
-                  className={adminTab === tab.key ? 'psri-btn-primary' : 'psri-btn-ghost'}
-                  onClick={() => { setAdminTab(tab.key); setQuickSelectCount(''); }}
-                  title={tab.key === 'New assigned'
-                    ? 'Created, assigned to an agent, and still untouched — nobody has set a lead status'
-                    : undefined}
-                >
-                  {tab.label}
-                  <span className="psri-tab-count">{tabCounts[tab.key] ?? 0}</span>
-                </button>
-              ))}
-              <PhoneQrButton
-                className="psri-tab-qr"
-                note="Point your phone camera at this code to open Prospects on the phone. You will be asked to sign in with your PSRI account there."
-              />
-            </div>
-          )}
+          <div className="psri-tabs">
+            {TABS.map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                className={adminTab === tab.key ? 'psri-btn-primary' : 'psri-btn-ghost'}
+                onClick={() => { setAdminTab(tab.key); setQuickSelectCount(''); }}
+                title={tab.key === 'New assigned'
+                  ? 'Created, assigned to an agent, and still untouched — nobody has set a lead status'
+                  : tab.key === 'Followup Due'
+                  ? 'Next Call Date is today or already past'
+                  : undefined}
+              >
+                {tab.label}
+                <span className="psri-tab-count">{tabCounts[tab.key] ?? 0}</span>
+              </button>
+            ))}
+            <PhoneQrButton
+              className="psri-tab-qr"
+              note="Point your phone camera at this code to open Prospects on the phone. You will be asked to sign in with your PSRI account there."
+            />
+          </div>
 
           {/* Date filter — applies to every tab, so switching tabs keeps it. */}
           <div className="psri-date-filter">
@@ -547,11 +565,10 @@ export default function ProspectsPage() {
           {loading && <div className="psri-empty">Loading prospects…</div>}
           {!loading && !loadErr && visibleProspects.length === 0 && (
             <div className="psri-empty">
-              {isAdmin
-                ? (adminTab === 'Other'
-                  ? 'No in-progress leads right now.'
-                  : `No ${adminTab === 'New assigned' ? 'assigned but untouched' : 'new'} leads right now.`)
-                : 'No open prospects assigned to you right now.'}
+              {adminTab === 'Other' ? 'No in-progress leads right now.'
+                : adminTab === 'Followup Due' ? 'No follow-ups due right now.'
+                : adminTab === 'New assigned' ? 'No assigned but untouched leads right now.'
+                : 'No new leads right now.'}
               {(dateFrom || dateTo) && ' Try clearing the date filter.'}
             </div>
           )}
