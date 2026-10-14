@@ -30,8 +30,11 @@ export default function PicklistSuggestionsPage() {
   const [toast, setToast] = useState('');
   const [allPicklists, setAllPicklists] = useState({});   // { [listName]: [values] } — for the "existing options" reference and the duplicate check
   const [expandedListId, setExpandedListId] = useState(0); // which row's "existing options" panel is open
+  const [expandedSearch, setExpandedSearch] = useState(''); // filter text inside that panel — the AI hint below can silently fail (external service), so this is the check that always works
   const [dupHints, setDupHints] = useState({});            // { [id]: likelyDuplicateOf string } from the same AI check the Cases form uses
   const dupChecked = useRef(new Set());                    // ids already sent through the duplicate check — avoid re-firing every render
+  const [rejectingId, setRejectingId] = useState(0);       // which row's reject-reason box is open
+  const [rejectReason, setRejectReason] = useState('');
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -86,23 +89,35 @@ export default function PicklistSuggestionsPage() {
     });
   }, [visibleItems, isAdmin, allPicklists]);
 
-  const review = async (item, approved) => {
+  const review = async (item, approved, reason = '') => {
     setReviewingId(item.id);
     try {
       const corrected = (editValues[item.id] || '').trim();
       const res = await psri.reviewPicklistSuggestion({
         id: item.id, approved,
         correctedValue: corrected && corrected !== item.value ? corrected : '',
+        rejectionReason: reason,
         reviewerId: currentUser?.id || '', reviewerName: currentUser?.name || '',
       });
       showToast(res.warning ? res.warning : (approved ? 'Approved — now live in the picklist' : 'Rejected'));
       setEditValues(v => { const next = { ...v }; delete next[item.id]; return next; });
+      setRejectingId(0);
+      setRejectReason('');
       await refresh(status);
     } catch (err) {
       showToast(err.message || 'Could not save review. Please try again.');
     } finally {
       setReviewingId(0);
     }
+  };
+
+  // Reject is two steps: clicking the button opens an inline reason box
+  // (startReject) instead of rejecting immediately — the agent who
+  // suggested it needs to see WHY, not just that it was turned down.
+  const startReject = (item) => { setRejectingId(item.id); setRejectReason(''); };
+  const confirmReject = (item) => {
+    if (!rejectReason.trim()) return;
+    review(item, false, rejectReason.trim());
   };
 
   return (
@@ -189,7 +204,7 @@ export default function PicklistSuggestionsPage() {
                     {isAdmin && existingForList.length > 0 && (
                       <button
                         type="button" className="admin-btn-ghost" style={{ fontSize: 11, padding: '2px 6px', marginTop: 4 }}
-                        onClick={() => setExpandedListId(id => id === it.id ? 0 : it.id)}
+                        onClick={() => { setExpandedListId(id => id === it.id ? 0 : it.id); setExpandedSearch(''); }}
                       >
                         {isExpanded ? 'Hide' : 'Show'} existing {it.listName} ({existingForList.length})
                       </button>
@@ -200,24 +215,56 @@ export default function PicklistSuggestionsPage() {
                   <td>
                     {it.status === 'pending' && <span style={{ color: '#b45309', fontWeight: 700 }}>Pending</span>}
                     {it.status === 'approved' && <span style={{ color: '#15803d', fontWeight: 700 }}>Approved by {it.reviewedByName}</span>}
-                    {it.status === 'rejected' && <span style={{ color: '#b91c1c', fontWeight: 700 }}>Rejected by {it.reviewedByName}</span>}
+                    {it.status === 'rejected' && (
+                      <span style={{ color: '#b91c1c', fontWeight: 700 }}>
+                        Rejected by {it.reviewedByName}
+                        {it.rejectionReason && <div style={{ fontWeight: 400, fontSize: 12, marginTop: 2 }}>Reason: {it.rejectionReason}</div>}
+                      </span>
+                    )}
                   </td>
                   {isAdmin && status === 'pending' && (
                     <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="admin-btn-primary" style={{ background: '#15803d', fontSize: 12, padding: '6px 10px' }} disabled={reviewingId === it.id} onClick={() => review(it, true)}>Approve</button>
-                        <button className="admin-btn-danger" style={{ fontSize: 12, padding: '6px 10px' }} disabled={reviewingId === it.id} onClick={() => review(it, false)}>Reject</button>
-                      </div>
+                      {rejectingId === it.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 180 }}>
+                          <input
+                            type="text" autoFocus placeholder="Why is this rejected?"
+                            value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                            style={{ fontSize: 12 }}
+                          />
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="admin-btn-danger" style={{ fontSize: 12, padding: '6px 10px' }} disabled={!rejectReason.trim() || reviewingId === it.id} onClick={() => confirmReject(it)}>
+                              Confirm Reject
+                            </button>
+                            <button className="admin-btn-ghost" style={{ fontSize: 12, padding: '6px 10px' }} onClick={() => setRejectingId(0)}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="admin-btn-primary" style={{ background: '#15803d', fontSize: 12, padding: '6px 10px' }} disabled={reviewingId === it.id} onClick={() => review(it, true)}>Approve</button>
+                          <button className="admin-btn-danger" style={{ fontSize: 12, padding: '6px 10px' }} disabled={reviewingId === it.id} onClick={() => startReject(it)}>Reject</button>
+                        </div>
+                      )}
                     </td>
                   )}
                 </tr>
                 {isExpanded && (
                   <tr>
                     <td colSpan={isAdmin && status === 'pending' ? 6 : 5} style={{ background: '#f8fafc' }}>
+                      <input
+                        type="text" autoFocus placeholder={`Search ${existingForList.length} existing values…`}
+                        value={expandedSearch} onChange={e => setExpandedSearch(e.target.value)}
+                        style={{ fontSize: 12, marginBottom: 8, width: 260 }}
+                      />
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '4px 0' }}>
-                        {existingForList.map(v => (
-                          <span key={v} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 999, background: '#e2e8f0', color: '#334155' }}>{v}</span>
-                        ))}
+                        {existingForList
+                          .filter(v => v.toLowerCase().includes(expandedSearch.trim().toLowerCase()))
+                          .sort((a, b) => a.localeCompare(b))
+                          .map(v => (
+                            <span key={v} style={{ fontSize: 12, padding: '3px 8px', borderRadius: 999, background: '#e2e8f0', color: '#334155' }}>{v}</span>
+                          ))}
+                        {expandedSearch.trim() && !existingForList.some(v => v.toLowerCase().includes(expandedSearch.trim().toLowerCase())) && (
+                          <span className="cp-hint">No existing value matches "{expandedSearch.trim()}"</span>
+                        )}
                       </div>
                     </td>
                   </tr>

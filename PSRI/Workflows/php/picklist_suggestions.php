@@ -104,6 +104,7 @@ function ps_list(string $status): array {
         'suggestedBy'      => $r['suggested_by'],
         'suggestedByName'  => $r['suggested_by_name'],
         'caseContext'      => $r['case_context'] ?? '',
+        'rejectionReason'  => $r['rejection_reason'] ?? '',
         'status'           => $r['status'],
         'reviewedBy'       => $r['reviewed_by'],
         'reviewedByName'   => $r['reviewed_by_name'],
@@ -140,9 +141,11 @@ function ps_review(array $b): array {
     $status = $approved ? 'approved' : 'rejected';
     $correctedValue = trim((string) ($b['correctedValue'] ?? ''));
     $finalValue = ($approved && $correctedValue !== '') ? $correctedValue : $row['value'];
+    $rejectionReason = trim((string) ($b['rejectionReason'] ?? ''));
+    if (!$approved && $rejectionReason === '') return ['error' => 'A rejection reason is required'];
 
-    $pdo->prepare('UPDATE picklist_suggestions SET status = ?, value = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = NOW() WHERE id = ?')
-        ->execute([$status, $finalValue, $reviewerId, $reviewerName, $id]);
+    $pdo->prepare('UPDATE picklist_suggestions SET status = ?, value = ?, rejection_reason = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = NOW() WHERE id = ?')
+        ->execute([$status, $finalValue, $approved ? '' : $rejectionReason, $reviewerId, $reviewerName, $id]);
 
     $pushWarning = '';
     if ($approved) {
