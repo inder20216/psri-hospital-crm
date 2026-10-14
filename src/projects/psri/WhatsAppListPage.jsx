@@ -227,6 +227,53 @@ export default function WhatsAppListPage() {
   // belong to a repeat group get an entry, so the badge shows on 2nd+ calls.
   const repeats = useMemo(() => buildRepeatIndex(cases), [cases]);
 
+  // The same repeats rolled up one row per repeated concern (not per case), so
+  // a person who called seven times about one thing is one line here, not seven.
+  // Built from every case, not just the ones that trigger a notification —
+  // otherwise most repeats would never be visible anywhere.
+  const repeatGroups = useMemo(() => {
+    const byKey = new Map();
+    cases.forEach(c => {
+      const rep = repeats.get(c.id);
+      if (!rep) return;
+      let g = byKey.get(rep.key);
+      if (!g) {
+        g = {
+          key: rep.key,
+          concern: rep.concern,
+          total: rep.total,
+          contactName: c.contactName,
+          contactMobile: c.contactMobile,
+          entries: [],
+        };
+        byKey.set(rep.key, g);
+      }
+      g.entries.push({
+        id: c.id,
+        n: rep.n,
+        date: rep.dates[rep.n - 1],
+        status: c.status,
+        callFor: c.callFor,
+      });
+    });
+    return [...byKey.values()]
+      .map(g => ({ ...g, entries: g.entries.sort((a, b) => a.n - b.n) }))
+      // Busiest first — the query that keeps coming back is the one to act on.
+      .sort((a, b) => b.total - a.total || String(a.concern).localeCompare(String(b.concern)));
+  }, [cases, repeats]);
+
+  const shownRepeatGroups = useMemo(() => {
+    if (!query) return repeatGroups;
+    const q = query.toLowerCase();
+    return repeatGroups.filter(g => [g.contactName, g.contactMobile, g.concern]
+      .map(v => String(v || '').toLowerCase()).join(' ').includes(q));
+  }, [repeatGroups, query]);
+
+  const repeatCallTotal = useMemo(
+    () => repeatGroups.reduce((n, g) => n + g.total, 0),
+    [repeatGroups],
+  );
+
   // Only cases that trigger a template are listed — a case with no match has no
   // notification to send, so it simply is not shown.
   const activeRows = useMemo(() => rows.filter(r => r.keys.length > 0), [rows]);
@@ -361,13 +408,16 @@ export default function WhatsAppListPage() {
   );
 
   const isCopiedView = filter === 'copied';
+  const isRepeatsView = filter === 'repeats';
   const visibleTemplates = WA_TEMPLATES.filter(t => !filter || filter === t.key);
 
-  const shownCount = isCopiedView
-    ? copiedItems.length
-    : (filter
-      ? searched.filter(r => r.keys.includes(filter) && !copiedSet.has(rowId(r.c, filter))).length
-      : allCount);
+  const shownCount = isRepeatsView
+    ? shownRepeatGroups.length
+    : isCopiedView
+      ? copiedItems.length
+      : (filter
+        ? searched.filter(r => r.keys.includes(filter) && !copiedSet.has(rowId(r.c, filter))).length
+        : allCount);
 
   const noNotifications = !loading && !loadErr && activeRows.length === 0;
 
@@ -376,7 +426,7 @@ export default function WhatsAppListPage() {
       <div className="psri-page-head">
         <div>
           <h1 className="psri-title">WhatsApp Notifications</h1>
-          <p className="psri-subtitle">PSRI Hospital — cases grouped by the notification they trigger. Copying one files it under “Copied”.</p>
+          <p className="psri-subtitle">PSRI Hospital — cases grouped by the notification they trigger. Copying one files it under “Copied”. Repeated query lists what people keep coming back about.</p>
         </div>
       </div>
 
@@ -401,6 +451,14 @@ export default function WhatsAppListPage() {
             <span className="psri-wa-chip-num">{t.n}</span> {t.title} · {counts[t.key] || 0}
           </button>
         ))}
+        <button
+          type="button"
+          className={`psri-wa-chip${isRepeatsView ? ' active' : ''}`}
+          onClick={() => setFilter(f => (f === 'repeats' ? '' : 'repeats'))}
+          title="The same person raising the same concern more than once"
+        >
+          <span className="psri-wa-chip-num">↻</span> Repeated query · {repeatGroups.length}
+        </button>
         <button
           type="button"
           className={`psri-wa-chip${isCopiedView ? ' active' : ''}`}
@@ -470,6 +528,64 @@ export default function WhatsAppListPage() {
           </section>
         );
       })}
+
+      {/* Repeated query — one row per concern a person has raised more than
+          once, busiest first. Not a notification: there is nothing to copy and
+          send here, it is the "this keeps coming back" list. */}
+      {(!filter || isRepeatsView) && (
+        (() => {
+          if (shownRepeatGroups.length === 0 && !isRepeatsView) return null; // hide when empty in the "All" view
+          return (
+            <section className="psri-wa-tpl">
+              <div className="psri-wa-tpl-head">
+                <span className="psri-wa-tpl-num psri-wa-tpl-num--muted">↻</span>
+                <div>
+                  <h2 className="psri-wa-tpl-title">Repeated query</h2>
+                  <p className="psri-wa-tpl-sub">
+                    Same person, same concern, more than once · {repeatGroups.length} concern{repeatGroups.length !== 1 ? 's' : ''} · {repeatCallTotal} call{repeatCallTotal !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+              {shownRepeatGroups.length === 0
+                ? (
+                  <div className="psri-empty">
+                    {query
+                      ? 'No repeated query matches your search.'
+                      : 'No repeated queries — nothing anyone has raised more than once about the same concern.'}
+                  </div>
+                )
+                : shownRepeatGroups.map(g => (
+                  <article key={g.key} className="psri-wa-tpl-row">
+                    <div className="psri-wa-tpl-rowhead">
+                      <strong>{g.contactName || 'Unknown Contact'}</strong>
+                      {g.contactMobile && <span className="cp-hint" style={{ margin: 0 }}>{g.contactMobile}</span>}
+                    </div>
+                    <div className="psri-wa-tpl-meta">
+                      <span
+                        className={`psri-badge psri-badge--repeat${g.total >= 4 ? ' psri-badge--hot' : ''}`}
+                        title={`${g.total} calls about the same concern`}
+                      >
+                        ↻ {g.total} call{g.total !== 1 ? 's' : ''} about this
+                      </span>
+                    </div>
+                    <p className="psri-rq-concern">{g.concern}</p>
+                    <ol className="psri-rq-calls">
+                      {g.entries.map(e => (
+                        <li key={e.id}>
+                          <span className="psri-rq-n">{e.n}</span>
+                          <span className="psri-rq-date">{e.date}</span>
+                          {e.callFor && <span className="psri-badge">{e.callFor}</span>}
+                          {e.status && <span className="psri-badge">{e.status}</span>}
+                          <span className="psri-rq-id">{e.id}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </article>
+                ))}
+            </section>
+          );
+        })()
+      )}
 
       {(!filter || isCopiedView) && (
         (() => {

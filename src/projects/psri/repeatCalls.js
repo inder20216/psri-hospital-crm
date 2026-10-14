@@ -80,6 +80,7 @@ export function buildRepeatIndex(cases) {
     const dates = ordered.map(e => formatDate(e.created));
     ordered.forEach((e, n) => {
       index.set(e.id, {
+        key,
         n: n + 1,
         total: ordered.length,
         dates,
