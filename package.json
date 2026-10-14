@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite --port 5200 --strictPort",
     "build": "vite build",
+    "build:server": "vite build --mode production-server --outDir dist-server",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",

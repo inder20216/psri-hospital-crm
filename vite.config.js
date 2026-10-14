@@ -7,13 +7,15 @@ import dns from 'node:dns'
 dns.setDefaultResultOrder('ipv4first')
 
 // https://vite.dev/config/
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => ({
   plugins: [react()],
-  // Only the production build needs the GitHub Pages subpath — the dev
-  // server serves from root, and MSAL's redirect URI (window.location.origin
-  // + BASE_URL) must match what's actually registered in Azure for
-  // localhost, which is the plain root, not /psri-hospital-crm/.
-  base: command === 'build' ? '/psri-hospital-crm/' : '/',
+  // The GitHub Pages build needs the repo subpath; the real production
+  // server (psri.openmindservices.in, its own dedicated domain) is served
+  // from root, same as local dev — and MSAL's redirect URI
+  // (window.location.origin + BASE_URL) must match whatever's actually
+  // registered in Azure for each origin, so this has to track exactly
+  // where each build is actually hosted, not just "is this a build".
+  base: command === 'build' && mode !== 'production-server' ? '/psri-hospital-crm/' : '/',
   build: {
     // Keep classic `(max-width: …)` media queries rather than letting the
     // minifier rewrite them to the modern `(width <= …)` range form. The phone
