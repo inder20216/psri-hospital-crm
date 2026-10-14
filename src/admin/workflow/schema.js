@@ -57,9 +57,27 @@ export const CASE_FIELDS = [
   { key: 'case.specialtyEnquiredFor', label: 'Case · Specialty Enquired For' },
   // Runner-computed: Type of Procedure + Name of Procedure + Specialty Enquired For + Type of Enquiry.
   { key: 'case.procedureOrSpecialty', label: 'Case · Procedure / Specialty / Enquiry (any)' },
+  // Runner-computed on case creation: same person + same Call For + same concern
+  // as an earlier case. Same rule as the "Repeated query" tab in the WhatsApp list.
+  { key: 'case.isRepeat',        label: 'Case · Repeated Query (true / false)' },
+  { key: 'case.repeatCount',     label: 'Case · Repeat · calls about this concern' },
+  { key: 'case.repeatOrdinal',   label: 'Case · Repeat · which call this is' },
+  { key: 'case.repeatFirstDate', label: 'Case · Repeat · first case date' },
+  { key: 'case.repeatCaseIds',   label: 'Case · Repeat · all matching case ids' },
 ];
 
-export const CONDITION_FIELDS = [...CONTACT_FIELDS, ...CASE_FIELDS];
+// Fields a condition can read from the message that fired a WhatsApp
+// workflow (WhatsApp Message / Follow-up Request). The "wa." prefix tells the
+// runner to read the incoming message, not the contact or the case.
+export const WA_FIELDS = [
+  { key: 'wa.text',         label: 'WhatsApp · Message text' },
+  { key: 'wa.from',         label: 'WhatsApp · From number' },
+  { key: 'wa.senderName',   label: 'WhatsApp · Sender name' },
+  { key: 'wa.threadId',     label: 'WhatsApp · Conversation' },
+  { key: 'wa.complaint_id', label: 'WhatsApp · Complaint ID' },
+];
+
+export const CONDITION_FIELDS = [...CONTACT_FIELDS, ...CASE_FIELDS, ...WA_FIELDS];
 
 export const OPERATORS = [
   { value: 'eq',          label: 'equals' },
@@ -76,6 +94,8 @@ export const OPERATOR_NEEDS_VALUE = op => op !== 'empty' && op !== 'notEmpty';
 export const TRIGGER_TRANSLATIONS = {
   'contact-created': { label: 'Contact Created', description: 'A new contact is added to the CRM' },
   'case-created':    { label: 'Case Created',    description: 'A new case (enquiry / appointment) is opened for a contact' },
+  'wa-message':      { label: 'WhatsApp Message',  description: 'A customer sends a message on WhatsApp' },
+  'wa-followup':     { label: 'Follow-up Request', description: 'A follow-up message is pushed in for a customer' },
 };
 
 // Maps a trigger node's actionType to the trigger key recorded on the workflow
@@ -84,6 +104,8 @@ export function triggerKeyFor(actionType) {
   return {
     contactCreated: 'contact-created',
     caseCreated:    'case-created',
+    waMessage:      'wa-message',
+    waFollowup:     'wa-followup',
   }[actionType] || 'contact-created';
 }
 
@@ -109,6 +131,22 @@ export const NODE_DEFS = {
     () => 'Fires when a new case is opened',
   ),
 
+  waMessage: def(
+    'waMessage', 'trigger', 'WhatsApp Message', '💬', '#16a34a',
+    'Fires when a customer sends a message on WhatsApp',
+    [],
+    {},
+    () => 'Fires when a customer replies on WhatsApp',
+  ),
+
+  waFollowup: def(
+    'waFollowup', 'trigger', 'Follow-up Request', '📤', '#16a34a',
+    'Fires when a follow-up message is pushed in for a customer, e.g. from the complaint system',
+    [],
+    {},
+    () => 'Fires when a follow-up is sent for a customer',
+  ),
+
   assign: def(
     'assign', 'action', 'Assign Contact', '👤', '#4338ca',
     'Assigns the new contact to an agent',
@@ -124,13 +162,23 @@ export const NODE_DEFS = {
 
   notify: def(
     'notify', 'action', 'Send Notification', '🔔', '#4338ca',
-    'Posts a message to a webhook, email address or WhatsApp number',
+    'Posts a message to a webhook, email address, WhatsApp number or Teams channel',
     [
       {
         key: 'channel', label: 'Channel', type: 'select', required: true,
-        options: [{ value: 'Webhook', label: 'Webhook URL' }, { value: 'Email', label: 'Email' }, { value: 'WhatsApp', label: 'WhatsApp' }],
+        options: [
+          { value: 'Webhook', label: 'Webhook URL' },
+          { value: 'Email', label: 'Email' },
+          { value: 'WhatsApp', label: 'WhatsApp' },
+          { value: 'Teams', label: 'Microsoft Teams' },
+        ],
       },
-      { key: 'url',      label: 'Webhook URL',    type: 'text',     required: true, showIf: c => c.channel !== 'Email' && c.channel !== 'WhatsApp', placeholder: 'https://hooks.example.com/…' },
+      { key: 'url',      label: 'Webhook URL',    type: 'text',     required: true, showIf: c => c.channel === 'Webhook', placeholder: 'https://hooks.example.com/…' },
+      // Teams: Power Automate "When a Teams webhook request is received" URL, or
+      // the older Incoming Webhook connector. Posts a card built from the case.
+      { key: 'title',    label: 'Card title',     type: 'text',     showIf: c => c.channel === 'Teams', placeholder: 'PSRI — repeated query', hint: 'Leave blank for a default title. {{contact.name}} etc. work here too.' },
+      { key: 'teamsUrl', label: 'Teams webhook URL', type: 'text',  required: true, warnIfEmpty: 'no Teams webhook URL yet — the alert is skipped until one is added.', showIf: c => c.channel === 'Teams', placeholder: 'https://prod-xx.westus.logic.azure.com/…', hint: 'In Teams: channel ▸ ⋯ ▸ Manage channel ▸ Workflows ▸ Add a workflow ▸ copy the URL.' },
+      { key: 'includeRepeatDates', label: 'Include first-seen date and all case IDs', type: 'checkbox', showIf: c => c.channel === 'Teams' },
       // A blank number is only a warning: the alert is skipped until one is
       // added, so a large routing workflow can go live a department at a time.
       { key: 'phones',   label: 'To (WhatsApp numbers or groups)', type: 'text', required: true, hint: 'Comma separated. A WhatsApp group is written group:<GROUP_ID> — the IDs are listed by the group setup command.', warnIfEmpty: 'no WhatsApp number yet — this alert is skipped until one is added.', showIf: c => c.channel === 'WhatsApp', placeholder: '9811000000, group:<GROUP_ID>' },
@@ -139,18 +187,20 @@ export const NODE_DEFS = {
       { key: 'waTemplate', label: 'WhatsApp template name', type: 'text', showIf: c => c.channel === 'WhatsApp', placeholder: 'e.g. psri_call_back — blank sends the message as plain text', hint: 'The approved template name in WhatsApp Manager. Plain text only reaches people who messaged your WhatsApp number in the last 24 hours.' },
       { key: 'waLanguage', label: 'Template language', type: 'text', showIf: c => c.channel === 'WhatsApp' && !!(c.waTemplate || '').trim(), placeholder: 'en', hint: 'Language code the template was approved in, e.g. en or en_US.' },
       { key: 'waParams',   label: 'Template values — one per line for {{1}}, {{2}}, …', type: 'textarea', showIf: c => c.channel === 'WhatsApp' && !!(c.waTemplate || '').trim(), placeholder: '{{contact.name}}\n{{contact.mobile}}\n{{case.summary}}' },
-      { key: 'message',  label: 'Message',        type: 'textarea', required: true, showIf: c => c.channel !== 'Email' && !(c.channel === 'WhatsApp' && (c.waTemplate || '').trim()), placeholder: 'New contact: {{contact.name}}, {{contact.mobile}}' },
+      { key: 'message',  label: 'Message',        type: 'textarea', required: true, showIf: c => c.channel === 'Webhook', placeholder: 'New contact: {{contact.name}}, {{contact.mobile}}' },
       { key: 'from',     label: 'From (email)',   type: 'text',                     showIf: c => c.channel === 'Email',     placeholder: 'Optional — blank uses the CRM sender' },
       { key: 'to',       label: 'To',             type: 'text',     required: true, showIf: c => c.channel === 'Email',     placeholder: 'team@example.com or {{contact.email}}' },
       { key: 'subject',  label: 'Subject',        type: 'text',     required: true, showIf: c => c.channel === 'Email',     placeholder: 'New patient contact' },
       { key: 'body',     label: 'Body',           type: 'textarea', required: true, showIf: c => c.channel === 'Email',     placeholder: '{{contact.name}} just registered.\n{{contact.notes}}' },
     ],
-    { channel: 'Webhook', url: '', phones: '', waTemplate: '', waLanguage: 'en', waParams: '', message: '', from: '', to: '', subject: '', body: '' },
+    { channel: 'Webhook', url: '', phones: '', waTemplate: '', waLanguage: 'en', waParams: '', message: '', from: '', to: '', subject: '', body: '', title: '', teamsUrl: '', includeRepeatDates: false },
     (cfg) => cfg.channel === 'Email'
       ? `Email → ${cfg.to || '…'}`
       : cfg.channel === 'WhatsApp'
         ? `WhatsApp → ${cfg.phones || '…'}${(cfg.waTemplate || '').trim() ? ` · ${cfg.waTemplate.trim()}` : ''}`
-        : `Webhook → ${cfg.url || '…'}`,
+        : cfg.channel === 'Teams'
+          ? `Teams → ${cfg.teamsUrl || '… (no webhook URL yet)'}`
+          : `Webhook → ${cfg.url || '…'}`,
   ),
 
   createCase: def(
@@ -228,7 +278,7 @@ export const NODE_DEFS = {
 };
 
 export const PALETTE_GROUPS = [
-  { group: 'Trigger',   color: '#0d9488', items: [NODE_DEFS.contactCreated, NODE_DEFS.caseCreated] },
+  { group: 'Trigger',   color: '#0d9488', items: [NODE_DEFS.contactCreated, NODE_DEFS.caseCreated, NODE_DEFS.waMessage, NODE_DEFS.waFollowup] },
   { group: 'Actions',   color: '#4338ca', items: [NODE_DEFS.assign, NODE_DEFS.notify, NODE_DEFS.createCase, NODE_DEFS.updateContact, NODE_DEFS.sheetRow, NODE_DEFS.webhook] },
   { group: 'Logic',     color: '#d97706', items: [NODE_DEFS.condition] },
 ];
@@ -351,7 +401,7 @@ export function validateGraph(nodes, edges) {
   const triggers = nodes.filter(isTriggerLike);
   const nonTriggers = nodes.filter(n => !isTriggerLike(n));
 
-  if (triggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add a trigger node (“Contact Created” or “Case Created”) to start the workflow.' });
+  if (triggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add a trigger node (“Contact Created”, “Case Created”, “WhatsApp Message” or “Follow-up Request”) to start the workflow.' });
   if (triggers.length > 1) issues.push({ severity: 'error', nodeId: null, message: 'Only one trigger node is allowed per workflow.' });
   if (nonTriggers.length === 0) issues.push({ severity: 'error', nodeId: null, message: 'Add at least one action node.' });
 

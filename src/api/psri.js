@@ -52,6 +52,11 @@ export const psri = {
   // Accepts either a bare search string or an options object ({ q, status })
   // — status is an exact-match filter (e.g. 'Incomplete'), q is a fuzzy search.
   getCases:   (opts) => get('psri-cases', typeof opts === 'string' ? { q: opts } : (opts || {}), WF_BASE),
+  // The plain psri-cases route caps at the 50 most recent rows. The export
+  // route streams every case as CSV, so screens that need the full list parse
+  // it instead (see WhatsAppListPage).
+  getCasesCsv: () => fetch(`${WF_BASE}/psri-cases-export`, { headers: { Accept: 'text/csv' } })
+    .then(r => (r.ok ? r.text() : Promise.reject(new Error(`psri-cases-export failed: ${r.status}`)))),
   addCase:    (data) => post('psri-case-add', data, WF_BASE),
   updateCase: (data) => post('psri-case-update', data, WF_BASE),
   // "Case Created" automations — call once a case is really saved (not for
@@ -154,4 +159,13 @@ export const psri = {
     .then(d => (d && d.success ? d.cases : []))
     .catch(err => { console.warn('[appreciation] getAppreciationList failed:', err.message); return []; }),
   reviewAppreciation: (data) => post('psri-appreciation-review', data, WF_BASE),
+
+  // WhatsApp chat (Cloud API) — department conversations shown inside the CRM
+  // (see PSRI/Workflows/php/wa.php). Reads never throw; the panel renders its
+  // own empty/error state. Sending throws so the composer can show the failure.
+  getWaThreads: (limit) => get('psri-wa-threads', { limit }, WF_BASE)
+    .then(d => (d && d.success ? d.threads : []))
+    .catch(err => { console.warn('[whatsapp] getWaThreads failed:', err.message); return []; }),
+  getWaThread: (id, title, caseId) => get('psri-wa-thread', { id, title, caseId }, WF_BASE),
+  sendWaMessage: (data) => post('psri-wa-send', data, WF_BASE),
 };

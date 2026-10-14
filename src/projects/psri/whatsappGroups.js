@@ -142,17 +142,34 @@ export function resolveWhatsAppGroups(form) {
   }));
 }
 
-// ── Invite-link resolution ───────────────────────────────────────────────────
-// Parses a Picklist Manager value into { label, url }. Accepts
-// "Report Desk = https://…", "Report Desk | https://…", "Report Desk: https://…"
-// or a bare URL (which then can't be matched to a label).
+// ── Invite-link / API-target resolution ─────────────────────────────────────
+// A Picklist Manager entry is "Label = value" (or "Label: value"); value is one of
+//   • an invite link      https://chat.whatsapp.com/…  → opened as a normal link
+//   • a Cloud API group   group:<GROUP_ID>             → a real in-CRM conversation
+//   • a phone number      91XXXXXXXXXX                 → a 1:1 in-CRM conversation
+// Extra "| value" parts may add the others, e.g.
+//   "Report Desk = https://chat.whatsapp.com/AbC | group:Y2FwaV9n…"
 function parseGroupEntry(raw) {
   const s = String(raw || '').trim();
   if (!s) return null;
-  const m = s.match(/^(.*?)\s*(?:\||=|:)\s*(https?:\/\/\S+|whatsapp:\/\/\S+)$/i);
-  if (m) return { label: m[1].trim(), url: m[2].trim() };
-  if (/^(https?:\/\/|whatsapp:\/\/)/i.test(s)) return { label: '', url: s };
-  return null;
+  const parts = s.split('|').map(p => p.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  let label = '';
+  let url = '';
+  let target = '';
+  const take = (v) => {
+    if (/^(https?:\/\/|whatsapp:\/\/)/i.test(v)) url = v;
+    else if (/^group\s*[:=]/i.test(v)) target = 'group:' + v.replace(/^group\s*[:=]\s*/i, '').trim();
+    else if (/^[+\d][\d\s()-]{8,}$/.test(v)) target = 'wa:' + v.replace(/\D+/g, '');
+  };
+  parts.forEach((part, i) => {
+    if (i === 0 && !/^(https?:\/\/|whatsapp:\/\/)/i.test(part)) {
+      const hm = part.match(/^([^=:]+?)\s*[=:]\s*(\S.*)$/);
+      if (hm) { label = hm[1].trim(); take(hm[2].trim()); return; }
+    }
+    take(part);
+  });
+  return { label, url, target };
 }
 
 // Resolves the invite link for a group id: Picklist Manager override first,
@@ -170,6 +187,42 @@ export function groupInviteLink(id, getList, kind) {
     }
   }
   return GROUP_INVITE_LINKS[id] || BRANCH_INVITE_LINKS[kind] || '';
+}
+
+// Cloud API targets may also be set in code (a group id or phone per desk),
+// used when the Picklist Manager entry carries no target. Blank = none.
+export const GROUP_API_TARGETS = {
+  reportDesk:       '',
+  billingDesk:      '',
+  appointmentDesk:  '',
+  frontDesk:        '',
+  transplant:       '',
+  cardiacDesk:      '',
+  orthoDesk:        '',
+  oncoDesk:         '',
+  neuroDesk:        '',
+  highValueGeneral: '',
+  patientRelations: '',
+  medicalSuper:     '',
+  emergencyDept:    '',
+  hospitalOps:      '',
+};
+
+// Resolves the in-CRM conversation target for a group id. Returns a thread id
+// ("group:<GROUP_ID>" or "wa:<PHONE>"), or '' when only an invite link is
+// configured (the widget then falls back to the link flow).
+export function groupApiTarget(id, getList) {
+  const label = WHATSAPP_GROUPS[id]?.label;
+  if (getList && label) {
+    const entries = getList(WHATSAPP_GROUPS_LIST) || [];
+    for (const raw of entries) {
+      const parsed = parseGroupEntry(raw);
+      if (parsed && parsed.label && parsed.label.toLowerCase() === label.toLowerCase() && parsed.target) {
+        return parsed.target;
+      }
+    }
+  }
+  return GROUP_API_TARGETS[id] || '';
 }
 
 // Prefilled case-update text an agent can paste into the group, matching the

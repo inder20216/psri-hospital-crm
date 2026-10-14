@@ -65,9 +65,9 @@ export default function ProjectRail() {
                 <span className="rail-icon">{p.icon}</span>
                 {expanded && <span className="rail-label">{p.name}</span>}
               </Link>
-              {expanded && isActiveProject && p.modules.length > 0 && (
+              {expanded && isActiveProject && p.modules.filter(m => !m.hidden).length > 0 && (
                 <div className="rail-submodules">
-                  {p.modules.map(mod => (
+                  {p.modules.filter(m => !m.hidden).map(mod => (
                     <Link
                       key={mod.path}
                       to={`/${p.id}${mod.path}`}
@@ -93,36 +93,27 @@ export default function ProjectRail() {
       </div>
 
       <div className="rail-bottom">
-        {/* Settings — Super Admin only */}
-        {isSuperAdmin && (
-          <div className="rail-project-group">
-            <Link
-              to="/admin/users"
-              className={`rail-item ${pathname.startsWith('/admin') ? 'active' : ''}`}
-              style={{ '--rail-color': '#4338ca' }}
-              title="Settings"
-            >
-              <span className="rail-icon">⚙</span>
-              {expanded && <span className="rail-label">Settings</span>}
-            </Link>
-            {expanded && pathname.startsWith('/admin') && (
-              <div className="rail-submodules">
-                <Link to="/admin/users" className={`rail-subitem ${pathname === '/admin/users' ? 'active' : ''}`}>
-                  <span className="rail-subicon">👤</span><span>Users</span>
-                </Link>
-                <Link to="/admin/picklists" className={`rail-subitem ${pathname === '/admin/picklists' ? 'active' : ''}`}>
-                  <span className="rail-subicon">☰</span><span>Picklists</span>
-                </Link>
-                <Link to="/admin/dependencies" className={`rail-subitem ${pathname === '/admin/dependencies' ? 'active' : ''}`}>
-                  <span className="rail-subicon">🔗</span><span>Dependencies</span>
-                </Link>
-                <Link to="/admin/workflows" className={`rail-subitem ${pathname === '/admin/workflows' ? 'active' : ''}`}>
-                  <span className="rail-subicon">🔀</span><span>Workflows</span>
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
+        {/* WhatsApp notification list — top of the rail tools */}
+        <Link
+          to="/psri/whatsapp"
+          className={`rail-item ${pathname === '/psri/whatsapp' ? 'active' : ''}`}
+          style={{ '--rail-color': '#25d366' }}
+          title="WhatsApp Notifications"
+        >
+          <span className="rail-icon">💬</span>
+          {expanded && <span className="rail-label">WhatsApp</span>}
+        </Link>
+
+        {/* Support — help with the CRM, below WhatsApp */}
+        <Link
+          to="/psri/support"
+          className={`rail-item ${pathname === '/psri/support' ? 'active' : ''}`}
+          style={{ '--rail-color': '#0284c7' }}
+          title="Support"
+        >
+          <span className="rail-icon">🎧</span>
+          {expanded && <span className="rail-label">Support</span>}
+        </Link>
 
         {/* Productivity dashboard — Admin and Super Admin (TL/Manager) */}
         {isAdmin && (
@@ -187,6 +178,37 @@ export default function ProjectRail() {
             </span>
             {expanded && <span className="rail-label">Suggestions</span>}
           </Link>
+        )}
+
+        {/* Settings — Super Admin only (kept below Suggestions) */}
+        {isSuperAdmin && (
+          <div className="rail-project-group">
+            <Link
+              to="/admin/users"
+              className={`rail-item ${pathname.startsWith('/admin') ? 'active' : ''}`}
+              style={{ '--rail-color': '#4338ca' }}
+              title="Settings"
+            >
+              <span className="rail-icon">⚙</span>
+              {expanded && <span className="rail-label">Settings</span>}
+            </Link>
+            {expanded && pathname.startsWith('/admin') && (
+              <div className="rail-submodules">
+                <Link to="/admin/users" className={`rail-subitem ${pathname === '/admin/users' ? 'active' : ''}`}>
+                  <span className="rail-subicon">👤</span><span>Users</span>
+                </Link>
+                <Link to="/admin/picklists" className={`rail-subitem ${pathname === '/admin/picklists' ? 'active' : ''}`}>
+                  <span className="rail-subicon">☰</span><span>Picklists</span>
+                </Link>
+                <Link to="/admin/dependencies" className={`rail-subitem ${pathname === '/admin/dependencies' ? 'active' : ''}`}>
+                  <span className="rail-subicon">🔗</span><span>Dependencies</span>
+                </Link>
+                <Link to="/admin/workflows" className={`rail-subitem ${pathname === '/admin/workflows' ? 'active' : ''}`}>
+                  <span className="rail-subicon">🔀</span><span>Workflows</span>
+                </Link>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Logged-in user avatar + logout */}

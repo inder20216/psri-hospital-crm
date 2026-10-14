@@ -14,14 +14,31 @@ export default defineConfig(({ command }) => ({
   // + BASE_URL) must match what's actually registered in Azure for
   // localhost, which is the plain root, not /psri-hospital-crm/.
   base: command === 'build' ? '/psri-hospital-crm/' : '/',
+  build: {
+    // Keep classic `(max-width: …)` media queries rather than letting the
+    // minifier rewrite them to the modern `(width <= …)` range form. The phone
+    // layout for the WhatsApp list is built from media queries, and older phone
+    // browsers silently drop range syntax — which would leave a phone showing
+    // the desktop layout.
+    cssTarget: ['chrome87', 'safari14', 'firefox78', 'edge88'],
+  },
   server: {
     proxy: {
-      // Workflow automation PHP API — run it locally with:
-      //   php -S localhost:8000 PSRI/Workflows/php/api.php
+      // Workflow automation PHP API.
+      //
+      // Pointed at the LIVE API: the local server on :8000 runs an older copy of
+      // the code that has no cases endpoints, so the WhatsApp list could not load
+      // anything locally. The live host serves the same database, so this is
+      // equivalent to local — just with the current code.
+      //
+      // To run against a local PHP server instead, swap the two blocks: use
+      // target 'http://localhost:8000' and add
+      //   rewrite: (path) => path.replace(/^\/psri-api/, ''),
+      // started with:  php -S localhost:8000 PSRI/Workflows/php/api.php
       '/psri-api': {
-        target: 'http://localhost:8000',
+        target: 'https://43.204.141.221.nip.io',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/psri-api/, ''),
+        secure: true,
       },
       '/psri-webhook': {
         target: 'https://automation.openmindhelpline.com',

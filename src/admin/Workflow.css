@@ -108,6 +108,16 @@
 }
 .wf-param textarea { resize: vertical; min-height: 64px; }
 .wf-param input:focus, .wf-param select:focus, .wf-param textarea:focus { outline: none; border-color: var(--admin-primary); }
+/* Boolean field: overrides the block-label styling that hits every direct label. */
+.wf-param > label.wf-param-check {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 0; cursor: pointer; user-select: none;
+}
+.wf-param-check input[type=checkbox] {
+  width: 16px; height: 16px; margin: 0; flex: 0 0 auto;
+  accent-color: var(--admin-primary); cursor: pointer;
+}
+.wf-param-check span { font-size: 13px; font-weight: 500; color: var(--admin-text); }
 .wf-param-hint { font-size: 11px; color: var(--admin-text-3); margin: 5px 0 0; line-height: 1.45; }
 .wf-panel-foot { padding: 10px 14px; border-top: 1px solid var(--admin-border); }
 .wf-btn-remove {

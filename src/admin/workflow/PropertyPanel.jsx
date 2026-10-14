@@ -89,6 +89,19 @@ function FieldControl({ f, config, onPatch }) {
     }
     case 'textarea':
       return <textarea rows={f.rows || (f.key === 'summary' ? 3 : 3)} value={value} onChange={e => onPatch({ [f.key]: e.target.value })} placeholder={f.placeholder || ''} />;
+    // A real boolean, not a text field — the runner tests this value, and the
+    // string "false" would read as true.
+    case 'checkbox':
+      return (
+        <label className="wf-param-check">
+          <input
+            type="checkbox"
+            checked={value === true || value === 'true' || value === 1 || value === '1'}
+            onChange={e => onPatch({ [f.key]: e.target.checked })}
+          />
+          <span>{f.checkboxLabel || 'Yes'}</span>
+        </label>
+      );
     case 'kv':
       return <KVRows value={value} onChange={v => onPatch({ [f.key]: v })} keyLabel={f.kvKeyLabel} valueLabel={f.kvValueLabel} />;
     default:
