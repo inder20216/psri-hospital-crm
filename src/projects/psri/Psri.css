@@ -759,8 +759,24 @@ body.psri-wa-focus .psri-modal { padding: 20px 16px; }
 body.psri-wa-focus .psri-qr-card svg { max-width: 100%; height: auto; }
 
 /* ── PROSPECTS: TABS + DATE FILTER ── */
-.psri-tabs { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.psri-tabs { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
 .psri-tabs button { font-size: 13px; }
+/* The QR button sits at the end of the tab row (beside "Other"), pushed away
+   from the tabs so it never reads as a filter. */
+.psri-tabs .psri-tab-qr {
+  margin-left: auto;
+  padding: 7px 12px;
+  border-radius: 20px;
+  border: 1.5px solid #99f6e4;
+  background: var(--psri-primary-lt);
+  color: var(--psri-primary-dk);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.psri-tab-qr:hover { border-color: var(--psri-primary); background: #ccfbf1; }
 .psri-tab-count {
   margin-left: 7px;
   padding: 1px 7px;

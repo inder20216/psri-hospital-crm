@@ -4,6 +4,7 @@ import { useUsers } from '../../context/UsersContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSparkTG } from '../../context/SparkTGContext';
 import { psri } from '../../api/psri';
+import PhoneQrButton from './PhoneQrButton';
 import './Psri.css';
 
 const FIELD_LABELS = {
@@ -457,6 +458,10 @@ export default function ProspectsPage() {
                   <span className="psri-tab-count">{tabCounts[tab.key] ?? 0}</span>
                 </button>
               ))}
+              <PhoneQrButton
+                className="psri-tab-qr"
+                note="Point your phone camera at this code to open Prospects on the phone. You will be asked to sign in with your PSRI account there."
+              />
             </div>
           )}
 

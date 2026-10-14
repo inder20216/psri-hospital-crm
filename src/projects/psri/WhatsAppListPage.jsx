@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
 import { psri } from '../../api/psri';
 import { usePicklists } from '../../context/PicklistsContext';
 import { resolveWhatsAppGroups, groupInviteLink } from './whatsappGroups';
 import { WA_TEMPLATES, caseTemplates, buildWaMessage } from './waNotifications';
 import { buildRepeatIndex, repeatTitle } from './repeatCalls';
+import PhoneQrButton from './PhoneQrButton';
 import './Psri.css';
 
 function fmtWhen(iso) {
@@ -104,18 +104,6 @@ const HIDDEN_GROUP_BUTTONS = new Set(['highValueGeneral']);
 const GROUP_SEND_ENABLED = true;
 
 const COPIED_STORE = 'psri.wa.copied.v1';
-
-// The address the QR code encodes: this same page, opened on a phone. In local
-// dev window.location is localhost, which a phone cannot reach, so point at the
-// deployed site instead.
-const PROD_ORIGIN = 'https://inder20216.github.io/psri-hospital-crm';
-const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])$/i;
-function pageUrlForQr() {
-  if (typeof window === 'undefined') return '';
-  const { hostname, pathname, search, hash, href } = window.location;
-  if (LOCAL_HOST_RE.test(hostname)) return `${PROD_ORIGIN}${pathname}${search}${hash}`;
-  return href;
-}
 function loadCopied() {
   try {
     const v = JSON.parse(localStorage.getItem(COPIED_STORE) || '[]');
@@ -140,23 +128,7 @@ export default function WhatsAppListPage() {
   const [query, setQuery] = useState('');
   const [copied, setCopied] = useState(loadCopied);
   const [flash, setFlash] = useState('');
-  const [showQr, setShowQr] = useState(false);
-  const [qrUrl, setQrUrl] = useState('');
-  const [qrCopied, setQrCopied] = useState(false);
   const flashTimer = useRef(null);
-
-  // The QR encodes this page's live address. Recomputed each time it is opened
-  // so it always matches the tab the admin is actually on.
-  const openQr = useCallback(() => {
-    setQrUrl(pageUrlForQr());
-    setQrCopied(false);
-    setShowQr(true);
-  }, []);
-
-  const copyQrLink = useCallback(async () => {
-    await copyText(qrUrl);
-    setQrCopied(true);
-  }, [qrUrl]);
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -198,14 +170,6 @@ export default function WhatsAppListPage() {
       document.body.classList.remove('psri-wa-focus');
     };
   }, []);
-
-  // Esc closes the QR dialog.
-  useEffect(() => {
-    if (!showQr) return undefined;
-    const onKey = e => { if (e.key === 'Escape') setShowQr(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [showQr]);
 
   const showFlash = useCallback(text => {
     setFlash(text);
@@ -485,14 +449,10 @@ export default function WhatsAppListPage() {
         >
           ✓ Copied · {copiedCount}
         </button>
-        <button
-          type="button"
+        <PhoneQrButton
           className="psri-wa-chip psri-wa-chip--action psri-qr-open-btn"
-          onClick={openQr}
-          title="Show a QR code to open this page on a phone"
-        >
-          📱 Open on phone
-        </button>
+          note="Point your phone camera at this code to open the WhatsApp list on the phone. You will be asked to sign in with your PSRI account there."
+        />
         <button
           type="button"
           className="psri-wa-chip psri-wa-chip--action"
@@ -629,40 +589,6 @@ export default function WhatsAppListPage() {
             </section>
           );
         })()
-      )}
-
-      {showQr && (
-        <div className="psri-modal-overlay" onClick={() => setShowQr(false)}>
-          <div className="psri-modal" style={{ maxWidth: 360 }} onClick={e => e.stopPropagation()}>
-            <div className="psri-modal-title">📱 Open on your phone</div>
-            <div className="psri-qr-body">
-              <div className="psri-qr-card">
-                <QRCodeSVG
-                  value={qrUrl || ' '}
-                  size={208}
-                  level="M"
-                  marginSize={2}
-                  bgColor="#ffffff"
-                  fgColor="#0f172a"
-                  title="Scan to open the WhatsApp list on your phone"
-                />
-              </div>
-              <div className="psri-qr-url">{qrUrl}</div>
-              <p className="psri-qr-note">
-                Point your phone camera at this code to open the WhatsApp list on the phone.
-                You will be asked to sign in with your PSRI account there.
-              </p>
-            </div>
-            <div className="psri-modal-actions">
-              <button type="button" className="psri-btn-ghost" onClick={() => setShowQr(false)}>
-                Close
-              </button>
-              <button type="button" className="psri-btn-primary" onClick={copyQrLink}>
-                {qrCopied ? 'Link copied ✓' : 'Copy link'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
