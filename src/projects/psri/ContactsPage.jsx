@@ -129,6 +129,17 @@ export default function ContactsPage() {
     if (form.altMobile2Isd === '+91' && form.altMobile2.trim() && !/^\d{10}$/.test(form.altMobile2.trim())) e.altMobile2 = 'Must be exactly 10 digits';
     if (form.landlineIsd === '+91' && form.landline.trim() && !/^\d{10}$/.test(form.landline.trim())) e.landline = 'Must be exactly 10 digits';
     if (!form.contactType) e.contactType = 'Select a contact type';
+    // Editing an existing contact — correcting a placeholder (auto-logged
+    // from a missed call) is exactly what this screen is for, so force all
+    // of Name/Contact Type/Source/Sub Source off their sentinel values
+    // before it can be saved. A no-op for an already-real contact, since its
+    // values never match these in the first place.
+    if (form.id) {
+      if (!form.contactType || form.contactType === 'Not Connected') e.contactType = 'Update the contact type';
+      if (!form.source || form.source === 'Unable to Connect') e.source = 'Select a real source';
+      if (!form.subSource || form.subSource === 'Unable to Connect') e.subSource = 'Select a real sub source';
+      if (form.name.trim() === 'Not Disclosed') e.name = 'Enter the actual name';
+    }
     if (form.age && (Number(form.age) < 0 || Number(form.age) > 130)) e.age = 'Enter a valid age';
     return e;
   };
@@ -306,27 +317,38 @@ export default function ContactsPage() {
                 className={errors.contactType ? 'err' : ''}
               >
                 <option value="">— Select —</option>
-                {withCurrentValue(getPicklist('Contact Type'), form.contactType).map(t => <option key={t} value={t}>{t}</option>)}
+                {/* "Not Connected" is a system-only placeholder the missed-call
+                    auto-log flow writes — never offered for an agent to pick
+                    manually, though it still renders if that's the contact's
+                    current value (editing it is exactly how it gets corrected). */}
+                {withCurrentValue(getPicklist('Contact Type'), form.contactType).filter(t => t !== 'Not Connected' || form.contactType === 'Not Connected').map(t => <option key={t} value={t}>{t}</option>)}
               </select>
               {errors.contactType && <p className="psri-err-msg">{errors.contactType}</p>}
             </div>
             <div className="psri-field">
-              <label>Source of Information</label>
-              <select value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value, subSource: '' }))}>
+              <label>Source of Information {form.id && <span className="req">*</span>}</label>
+              <select
+                value={form.source}
+                onChange={e => setForm(f => ({ ...f, source: e.target.value, subSource: '' }))}
+                className={errors.source ? 'err' : ''}
+              >
                 <option value="">— Select —</option>
                 {withCurrentValue(getPicklist('Source of Information'), form.source).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
+              {errors.source && <p className="psri-err-msg">{errors.source}</p>}
             </div>
             <div className="psri-field">
-              <label>Sub Source of Information</label>
+              <label>Sub Source of Information {form.id && <span className="req">*</span>}</label>
               <select
                 value={form.subSource}
                 disabled={!form.source}
                 onChange={e => setForm(f => ({ ...f, subSource: e.target.value }))}
+                className={errors.subSource ? 'err' : ''}
               >
                 <option value="">{form.source ? '— Select —' : '— Select Source first —'}</option>
                 {form.source ? withCurrentValue(getDependentOptions(getDependentValues, getPicklist, 'Sub Source of Information', 'Source of Information', form.source), form.subSource).map(s => <option key={s} value={s}>{s}</option>) : null}
               </select>
+              {errors.subSource && <p className="psri-err-msg">{errors.subSource}</p>}
             </div>
             <div className="psri-field">
               <label>Language Preference</label>

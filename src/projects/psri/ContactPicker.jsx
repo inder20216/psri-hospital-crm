@@ -425,7 +425,11 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
                     className={quickErrors.contactType ? 'err' : ''}
                   >
                     <option value="">— Select —</option>
-                    {getList('Contact Type').map(t => <option key={t} value={t}>{t}</option>)}
+                    {/* "Not Connected" is a system-only placeholder the missed-call
+                        auto-log flow writes — never offered for an agent to pick
+                        manually, though it still renders if that's the contact's
+                        current value (editing it is exactly how it gets corrected). */}
+                    {getList('Contact Type').filter(t => t !== 'Not Connected' || quickForm.contactType === 'Not Connected').map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   {quickErrors.contactType && <p className="psri-err-msg">{quickErrors.contactType}</p>}
                 </div>
