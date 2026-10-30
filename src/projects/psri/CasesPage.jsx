@@ -752,6 +752,8 @@ export default function CasesPage() {
     const e = {};
     if (!form.contact) e.contact = 'Select or create a contact first';
     if (form.channel === 'Call' && !form.typeOfCall) e.typeOfCall = 'Select Type of Call';
+    if (form.channel === 'Call' && !form.calledNumber.trim()) e.calledNumber = 'Called Number is required';
+    if (form.channel === 'Call' && !form.callTxnId.trim()) e.callTxnId = 'Call Transaction ID is required';
     if (!form.callFor) e.callFor = 'Select Call For';
     if (!form.summary.trim()) e.summary = 'Summary is required';
     if (form.isHighValue) {
@@ -958,12 +960,13 @@ export default function CasesPage() {
             {form.channel === 'Call' && (
               <>
                 <div className="psri-field">
-                  <label>Called Number</label>
+                  <label>Called Number <span className="req">*</span></label>
                   <input
                     type="text"
                     value={form.calledNumber}
                     onChange={e => setForm(f => ({ ...f, calledNumber: e.target.value }))}
                     disabled={calledSameAsContact}
+                    className={errors.calledNumber ? 'err' : ''}
                   />
                   <label className="psri-checkbox-inline">
                     <input
@@ -978,10 +981,18 @@ export default function CasesPage() {
                     />
                     Same as contact's mobile
                   </label>
+                  {errors.calledNumber && <p className="psri-err-msg">{errors.calledNumber}</p>}
                 </div>
                 <div className="psri-field">
-                  <label>Call Transaction ID</label>
-                  <input type="text" value={form.callTxnId} onChange={e => setForm(f => ({ ...f, callTxnId: e.target.value }))} placeholder="e.g. 5e15d0d8-f557-491f-adbb-cc63a5cfae0f" />
+                  <label>Call Transaction ID <span className="req">*</span></label>
+                  <input
+                    type="text"
+                    value={form.callTxnId}
+                    onChange={e => setForm(f => ({ ...f, callTxnId: e.target.value }))}
+                    placeholder="e.g. 5e15d0d8-f557-491f-adbb-cc63a5cfae0f"
+                    className={errors.callTxnId ? 'err' : ''}
+                  />
+                  {errors.callTxnId && <p className="psri-err-msg">{errors.callTxnId}</p>}
                 </div>
               </>
             )}

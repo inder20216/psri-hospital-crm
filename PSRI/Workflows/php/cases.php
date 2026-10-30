@@ -103,6 +103,8 @@ function cases_add(array $b): array {
     if (empty($b['contactId'])) return ['error' => 'Select or create a contact first'];
     if (!$isDraft) {
         if (($b['channel'] ?? '') === 'Call' && empty($b['typeOfCall'])) return ['error' => 'Type of Call is required for Call channel'];
+        if (($b['channel'] ?? '') === 'Call' && trim((string) ($b['calledNumber'] ?? '')) === '') return ['error' => 'Called Number is required for Call channel'];
+        if (($b['channel'] ?? '') === 'Call' && trim((string) ($b['callTxnId'] ?? '')) === '') return ['error' => 'Call Transaction ID is required for Call channel'];
         if (empty($b['callFor'])) return ['error' => 'Call For is required'];
         if (trim((string) ($b['summary'] ?? '')) === '') return ['error' => 'Summary is required'];
     }
@@ -196,13 +198,18 @@ function cases_update(array $b): array {
     $pick     = static fn (string $key, string $col) => array_key_exists($key, $b) ? $b[$key] : ($current[$col] ?? '');
     $pickBool = static fn (string $key, string $col) => (array_key_exists($key, $b) ? !empty($b[$key]) : !empty($current[$col])) ? 1 : 0;
 
-    $typeOfCall = (string) $pick('typeOfCall', 'type_of_call');
-    $callFor    = (string) $pick('callFor', 'call_for');
-    $summary    = trim((string) $pick('summary', 'summary'));
-    $isDraft    = $pick('status', 'status') === 'Incomplete';
+    $channel     = (string) $pick('channel', 'channel');
+    $typeOfCall  = (string) $pick('typeOfCall', 'type_of_call');
+    $calledNumber = trim((string) $pick('calledNumber', 'called_number'));
+    $callTxnId   = trim((string) $pick('callTxnId', 'call_txn_id'));
+    $callFor     = (string) $pick('callFor', 'call_for');
+    $summary     = trim((string) $pick('summary', 'summary'));
+    $isDraft     = $pick('status', 'status') === 'Incomplete';
 
     if (!$isDraft) {
         if ($typeOfCall === '') return ['error' => 'Type of Call is required'];
+        if ($channel === 'Call' && $calledNumber === '') return ['error' => 'Called Number is required for Call channel'];
+        if ($channel === 'Call' && $callTxnId === '') return ['error' => 'Call Transaction ID is required for Call channel'];
         if ($callFor === '') return ['error' => 'Call For is required'];
         if ($summary === '') return ['error' => 'Summary is required'];
     }
