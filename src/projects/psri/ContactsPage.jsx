@@ -31,7 +31,7 @@ function fullNumber(isd, num) { return num ? `${isd} ${num}` : ''; }
 
 const emptyForm = {
   id: '', salutation: 'Mr.', name: '', age: '',
-  mobileIsd: '+91', mobile: '', altMobileIsd: '+91', altMobile: '', landlineIsd: '+91', landline: '',
+  mobileIsd: '+91', mobile: '', altMobileIsd: '+91', altMobile: '', altMobile2Isd: '+91', altMobile2: '', landlineIsd: '+91', landline: '',
   email: '',
   country: 'IN', state: '', city: '',
   contactType: '', source: '', subSource: '', language: 'English',
@@ -115,7 +115,7 @@ export default function ContactsPage() {
     const c = findCountry(iso2);
     setForm(f => ({
       ...f, country: iso2, state: '', city: '',
-      mobileIsd: c.isd, altMobileIsd: c.isd, landlineIsd: c.isd,
+      mobileIsd: c.isd, altMobileIsd: c.isd, altMobile2Isd: c.isd, landlineIsd: c.isd,
     }));
   };
 
@@ -232,6 +232,12 @@ export default function ContactsPage() {
               isdValue={form.altMobileIsd} numValue={form.altMobile}
               onIsdChange={v => setForm(f => ({ ...f, altMobileIsd: v }))}
               onNumChange={v => setForm(f => ({ ...f, altMobile: v }))}
+            />
+            <PhoneField
+              label="Alternate Mobile 2"
+              isdValue={form.altMobile2Isd} numValue={form.altMobile2}
+              onIsdChange={v => setForm(f => ({ ...f, altMobile2Isd: v }))}
+              onNumChange={v => setForm(f => ({ ...f, altMobile2: v }))}
             />
             <PhoneField
               label="Alternate Landline"
@@ -434,6 +440,7 @@ export default function ContactsPage() {
               <div className="psri-detail-grid">
                 <div className="psri-detail-item"><span>Mobile</span><strong>{fullNumber(selected.mobileIsd, selected.mobile) || '—'}</strong></div>
                 <div className="psri-detail-item"><span>Alternate Mobile</span><strong>{fullNumber(selected.altMobileIsd, selected.altMobile) || '—'}</strong></div>
+                <div className="psri-detail-item"><span>Alternate Mobile 2</span><strong>{fullNumber(selected.altMobile2Isd, selected.altMobile2) || '—'}</strong></div>
                 <div className="psri-detail-item"><span>Alternate Landline</span><strong>{fullNumber(selected.landlineIsd, selected.landline) || '—'}</strong></div>
                 <div className="psri-detail-item"><span>Email</span><strong>{selected.email || '—'}</strong></div>
                 <div className="psri-detail-item"><span>Age</span><strong>{selected.age || '—'}</strong></div>

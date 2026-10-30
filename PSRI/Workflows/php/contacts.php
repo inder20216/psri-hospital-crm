@@ -23,6 +23,8 @@ function contacts_row_to_api(array $r): array {
         'mobile'       => $r['mobile']         ?? '',
         'altMobileIsd' => $r['alt_mobile_isd'] ?: '+91',
         'altMobile'    => $r['alt_mobile']     ?? '',
+        'altMobile2Isd' => $r['alt_mobile2_isd'] ?: '+91',
+        'altMobile2'    => $r['alt_mobile2']     ?? '',
         'landlineIsd'  => $r['landline_isd']   ?: '+91',
         'landline'     => $r['landline']       ?? '',
         'email'        => $r['email']          ?? '',
@@ -40,7 +42,7 @@ function contacts_row_to_api(array $r): array {
 }
 
 /**
- * q non-empty: fuzzy search across name/mobile/alt_mobile/landline/email
+ * q non-empty: fuzzy search across name/mobile/alt_mobile/alt_mobile2/landline/email
  * (matches the n8n version, now including landline). q empty: 50 most
  * recent contacts.
  */
@@ -49,9 +51,9 @@ function contacts_list(string $q): array {
     if ($q !== '') {
         $like = '%' . $q . '%';
         $st = $pdo->prepare(
-            'SELECT * FROM contacts WHERE full_name LIKE ? OR mobile LIKE ? OR alt_mobile LIKE ? OR landline LIKE ? OR email LIKE ? ORDER BY created DESC LIMIT 50'
+            'SELECT * FROM contacts WHERE full_name LIKE ? OR mobile LIKE ? OR alt_mobile LIKE ? OR alt_mobile2 LIKE ? OR landline LIKE ? OR email LIKE ? ORDER BY created DESC LIMIT 50'
         );
-        $st->execute([$like, $like, $like, $like, $like]);
+        $st->execute([$like, $like, $like, $like, $like, $like]);
     } else {
         $st = $pdo->query('SELECT * FROM contacts ORDER BY created DESC LIMIT 50');
     }
@@ -86,8 +88,8 @@ function contacts_add(array $b): array {
     $newId = 'CON' . substr((string) round(microtime(true) * 1000), -8);
 
     $ins = $pdo->prepare(
-        'INSERT INTO contacts (contact_id, salutation, full_name, age, mobile_isd, mobile, alt_mobile_isd, alt_mobile, landline_isd, landline, email, country, state, city, contact_type, source, sub_source, language, assigned_to, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO contacts (contact_id, salutation, full_name, age, mobile_isd, mobile, alt_mobile_isd, alt_mobile, alt_mobile2_isd, alt_mobile2, landline_isd, landline, email, country, state, city, contact_type, source, sub_source, language, assigned_to, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $ins->execute([
         $newId,
@@ -98,6 +100,8 @@ function contacts_add(array $b): array {
         $mobile,
         (string) ($b['altMobileIsd'] ?? '+91'),
         (string) ($b['altMobile'] ?? ''),
+        (string) ($b['altMobile2Isd'] ?? '+91'),
+        (string) ($b['altMobile2'] ?? ''),
         (string) ($b['landlineIsd'] ?? '+91'),
         (string) ($b['landline'] ?? ''),
         (string) ($b['email'] ?? ''),
@@ -144,7 +148,7 @@ function contacts_update(array $b): array {
     $age = $pick('age', 'age');
 
     $upd = $pdo->prepare(
-        'UPDATE contacts SET salutation=?, full_name=?, age=?, mobile_isd=?, mobile=?, alt_mobile_isd=?, alt_mobile=?, landline_isd=?, landline=?, email=?, country=?, state=?, city=?, contact_type=?, source=?, sub_source=?, language=?, assigned_to=?, notes=? WHERE contact_id=?'
+        'UPDATE contacts SET salutation=?, full_name=?, age=?, mobile_isd=?, mobile=?, alt_mobile_isd=?, alt_mobile=?, alt_mobile2_isd=?, alt_mobile2=?, landline_isd=?, landline=?, email=?, country=?, state=?, city=?, contact_type=?, source=?, sub_source=?, language=?, assigned_to=?, notes=? WHERE contact_id=?'
     );
     $upd->execute([
         (string) $pick('salutation', 'salutation'),
@@ -154,6 +158,8 @@ function contacts_update(array $b): array {
         $mobile,
         (string) $pick('altMobileIsd', 'alt_mobile_isd'),
         (string) $pick('altMobile', 'alt_mobile'),
+        (string) $pick('altMobile2Isd', 'alt_mobile2_isd'),
+        (string) $pick('altMobile2', 'alt_mobile2'),
         (string) $pick('landlineIsd', 'landline_isd'),
         (string) $pick('landline', 'landline'),
         (string) $pick('email', 'email'),

@@ -3,6 +3,7 @@ import { psri } from '../../api/psri';
 import { usePicklists } from '../../context/PicklistsContext';
 import { useDependencies } from '../../context/DependenciesContext';
 import { useUsers } from '../../context/UsersContext';
+import { useAuth } from '../../context/AuthContext';
 import { COUNTRIES, findCountry } from '../../data/countries';
 import { INDIA_STATES, INDIA_STATE_NAMES } from '../../data/indiaStates';
 import './Psri.css';
@@ -25,7 +26,7 @@ function getDependentOptions(getDependentValues, getList, subField, mainField, m
 
 const quickEmptyForm = {
   salutation: 'Mr.', name: '', age: '',
-  mobileIsd: '+91', mobile: '', altMobileIsd: '+91', altMobile: '', landlineIsd: '+91', landline: '',
+  mobileIsd: '+91', mobile: '', altMobileIsd: '+91', altMobile: '', altMobile2Isd: '+91', altMobile2: '', landlineIsd: '+91', landline: '',
   email: '',
   country: 'IN', state: '', city: '',
   contactType: '', source: '', subSource: '', language: 'English',
@@ -66,6 +67,7 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
   const { getList } = usePicklists();
   const { getDependentValues } = useDependencies();
   const { users } = useUsers();
+  const { currentUser, isAdmin } = useAuth();
   const [query, setQuery]       = useState(initialQuery);
   const [results, setResults]   = useState([]);
   const [searching, setSearching] = useState(false);
@@ -76,22 +78,132 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
   const [quickErrors, setQuickErrors]   = useState({});
   const [quickSaving, setQuickSaving]   = useState(false);
   const [quickErr, setQuickErr]         = useState('');
+  // Non-null while the modal is editing the already-selected contact in
+  // place, rather than adding a new one — lets the agent fix a placeholder
+  // name/details right from the Case screen without losing the call's Txn
+  // ID / called number (those live in the Case form, untouched by this).
+  const [editingContactId, setEditingContactId] = useState(null);
+  // Non-null while the agent has said "this unmatched caller is actually an
+  // existing contact" (triggered from the auto-opened Quick Add for a call
+  // with no match) — holds the phone number to attach once they pick which
+  // existing contact it belongs to. Search behaves normally in this mode;
+  // picking a result attaches instead of just selecting.
+  const [attachPhone, setAttachPhone]   = useState(null);
+  const [attaching,   setAttaching]     = useState(false);
+  const [attachErr,   setAttachErr]     = useState('');
   const debounceRef   = useRef(null);
   const autoOpenedRef = useRef(false);
 
-  const openQuickAdd = useCallback(() => {
-    setQuickForm({ ...quickEmptyForm, name: query.trim() && /^\d+$/.test(query.trim()) ? '' : query.trim(), mobile: /^\d{10}$/.test(query.trim()) ? query.trim() : '' });
+  // Only true for the exact flow this is meant for: DialerPanel auto-opening
+  // Quick Add because an incoming/outgoing call's number matched no contact.
+  // initialQuery is fixed at mount (see useState below), so later edits to
+  // the search box can't accidentally turn this on for an unrelated search.
+  const isUnmatchedCallPhone = autoOpenQuickAdd && /^\d{10}$/.test(initialQuery.trim());
+
+  const openQuickAdd = useCallback((prefillMobile) => {
+    const mobileSeed = prefillMobile || query.trim();
+    setEditingContactId(null);
+    setQuickForm({
+      ...quickEmptyForm,
+      name: mobileSeed && /^\d+$/.test(mobileSeed) ? '' : (prefillMobile ? '' : mobileSeed),
+      mobile: /^\d{10}$/.test(mobileSeed) ? mobileSeed : '',
+      // Whoever's adding this contact owns it by default — a regular agent
+      // can't reassign it away (see the field's disabled state below); an
+      // admin still can, if they need to hand it to someone else.
+      assignedTo: currentUser?.id || '',
+    });
     setQuickErrors({}); setQuickErr('');
     setShowQuickAdd(true);
-  }, [query]);
+  }, [query, currentUser]);
+
+  const openEditContact = () => {
+    setEditingContactId(selected.id);
+    setQuickForm({
+      salutation: selected.salutation || 'Mr.', name: selected.name || '', age: selected.age || '',
+      mobileIsd: selected.mobileIsd || '+91', mobile: selected.mobile || '',
+      altMobileIsd: selected.altMobileIsd || '+91', altMobile: selected.altMobile || '',
+      altMobile2Isd: selected.altMobile2Isd || '+91', altMobile2: selected.altMobile2 || '',
+      landlineIsd: selected.landlineIsd || '+91', landline: selected.landline || '',
+      email: selected.email || '',
+      country: selected.country || 'IN', state: selected.state || '', city: selected.city || '',
+      contactType: selected.contactType || '', source: selected.source || '', subSource: selected.subSource || '',
+      language: selected.language || 'English', assignedTo: selected.assignedTo || '', notes: selected.notes || '',
+    });
+    setQuickErrors({}); setQuickErr('');
+    setShowQuickAdd(true);
+  };
+
+  // A second person calling from the same registered number (e.g. a family
+  // member on the patient's own phone) — not the same person as `selected`,
+  // so this creates a NEW contact (editingContactId stays null), pre-filled
+  // with everything that's genuinely shared (phone, source, patient type,
+  // address...) so the agent only has to change what's actually different,
+  // starting with the name.
+  const openAddAnotherContact = () => {
+    setEditingContactId(null);
+    setQuickForm({
+      salutation: 'Mr.', name: '', age: '',
+      mobileIsd: selected.mobileIsd || '+91', mobile: selected.mobile || '',
+      altMobileIsd: selected.altMobileIsd || '+91', altMobile: selected.altMobile || '',
+      altMobile2Isd: selected.altMobile2Isd || '+91', altMobile2: selected.altMobile2 || '',
+      landlineIsd: selected.landlineIsd || '+91', landline: selected.landline || '',
+      email: '',
+      country: selected.country || 'IN', state: selected.state || '', city: selected.city || '',
+      contactType: selected.contactType || '', source: selected.source || '', subSource: selected.subSource || '',
+      language: selected.language || 'English',
+      // Not copied from the source contact — whoever's adding this new
+      // person owns it, same as a plain Quick Add.
+      assignedTo: currentUser?.id || '',
+      notes: '',
+    });
+    setQuickErrors({}); setQuickErr('');
+    setShowQuickAdd(true);
+  };
+
+  // Agent recognises the unmatched caller as someone already in the system —
+  // switch from "add a new contact" to "find the existing one", keeping the
+  // call's number around to attach once they pick it.
+  const switchToAttachExisting = () => {
+    setShowQuickAdd(false);
+    setAttachErr('');
+    setAttachPhone(quickForm.mobile || initialQuery.trim());
+    setQuery('');
+    setResults([]);
+    setSearched(false);
+  };
+
+  // Saves the incoming call's number into the first free alternate-number
+  // slot on the chosen existing contact, then proceeds as if that contact
+  // had matched the call to begin with.
+  const attachAndSelect = async (c) => {
+    setAttaching(true);
+    setAttachErr('');
+    const slot = !c.altMobile ? 'altMobile' : !c.altMobile2 ? 'altMobile2' : !c.landline ? 'landline' : null;
+    if (!slot) {
+      setAttachErr('This contact already has every alternate number slot filled — edit the contact to free one up first.');
+      setAttaching(false);
+      return;
+    }
+    const isdKey = slot === 'landline' ? 'landlineIsd' : `${slot}Isd`;
+    const updated = { ...c, [slot]: attachPhone, [isdKey]: c.mobileIsd || '+91' };
+    try {
+      await psri.updateContact(updated);
+      setAttachPhone(null);
+      onSelect(updated);
+    } catch (err) {
+      setAttachErr(err.message || 'Could not attach this number to the contact');
+    } finally {
+      setAttaching(false);
+    }
+  };
 
   // Auto-open the Quick Add modal when the caller has no contact record
   useEffect(() => {
-    if (autoOpenQuickAdd && searched && !searching && results.length === 0 && !showQuickAdd && !autoOpenedRef.current) {
+    if (autoOpenQuickAdd && searched && !searching && results.length === 0 && !showQuickAdd && !autoOpenedRef.current && !attachPhone) {
       autoOpenedRef.current = true;
       openQuickAdd();
     }
-  }, [autoOpenQuickAdd, searched, searching, results.length, showQuickAdd, openQuickAdd]);
+  }, [autoOpenQuickAdd, searched, searching, results.length, showQuickAdd, openQuickAdd, attachPhone]);
 
   useEffect(() => {
     clearTimeout(debounceRef.current);
@@ -111,7 +223,7 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
     const c = findCountry(iso2);
     setQuickForm(f => ({
       ...f, country: iso2, state: '', city: '',
-      mobileIsd: c.isd, altMobileIsd: c.isd, landlineIsd: c.isd,
+      mobileIsd: c.isd, altMobileIsd: c.isd, altMobile2Isd: c.isd, landlineIsd: c.isd,
     }));
   };
 
@@ -121,6 +233,20 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
     if (!/^\d{10}$/.test(quickForm.mobile.trim())) e.mobile = 'Valid 10-digit mobile is required';
     if (!quickForm.contactType) e.contactType = 'Select a contact type';
     if (quickForm.age && (Number(quickForm.age) < 0 || Number(quickForm.age) > 130)) e.age = 'Enter a valid age';
+    // Only enforced when correcting an existing contact (editingContactId
+    // set), not on a fresh Quick Add — a live call shouldn't be held up by
+    // these, but a second, deliberate touch to fix up the contact's details
+    // should actually finish the job rather than leave them still blank.
+    // Also reject the auto-log sentinel values themselves ("Not Connected" /
+    // "Unable to Connect") — a contact auto-created from an unanswered
+    // callback starts with these already filled in on purpose, so a plain
+    // blank check alone wouldn't catch it; the agent must pick something real.
+    if (editingContactId) {
+      if (!quickForm.contactType || quickForm.contactType === 'Not Connected') e.contactType = 'Update the contact type';
+      if (!quickForm.source || quickForm.source === 'Unable to Connect') e.source = 'Select a real source';
+      if (!quickForm.subSource || quickForm.subSource === 'Unable to Connect') e.subSource = 'Select a real sub source';
+      if (quickForm.name.trim() === 'Not Disclosed') e.name = 'Enter the caller\'s actual name';
+    }
     return e;
   };
 
@@ -131,77 +257,57 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
     ev?.preventDefault();
     const errs = validateQuick();
     if (Object.keys(errs).length) { setQuickErrors(errs); return; }
-    const cleaned = { ...quickForm, name: titleCase(quickForm.name) };
+    // Belt-and-suspenders alongside the disabled select above — a non-admin
+    // creating a new contact always carries their own id for assignedTo,
+    // regardless of what's sitting in state. Only on create: editing an
+    // existing contact must NOT silently reassign it away from whoever it's
+    // currently with just because a non-admin fixed an unrelated typo.
+    const cleaned = {
+      ...quickForm,
+      name: titleCase(quickForm.name),
+      assignedTo: (isAdmin || editingContactId) ? quickForm.assignedTo : (currentUser?.id || ''),
+    };
     setQuickSaving(true);
     setQuickErr('');
     try {
-      const res = await psri.addContact(cleaned);
-      onSelect({ ...cleaned, id: res.id });
+      if (editingContactId) {
+        await psri.updateContact({ ...cleaned, id: editingContactId });
+        // Preserve the contact's original `created` timestamp (editing isn't
+        // creating) — CasesPage uses that timestamp's recency, not a session
+        // flag, to decide whether to nudge the agent to double-check details,
+        // so it keeps working correctly across page reloads/new tabs.
+        onSelect({ ...cleaned, id: editingContactId, created: selected.created });
+      } else {
+        const res = await psri.addContact(cleaned);
+        // No `created` comes back from addContact's response, so stamp one
+        // client-side (close enough to the server's) — CasesPage reads this
+        // to know the contact is fresh-off-Quick-Add.
+        onSelect({ ...cleaned, id: res.id, created: new Date().toISOString() });
+      }
       setShowQuickAdd(false);
+      setEditingContactId(null);
       setQuery('');
       setResults([]);
     } catch (err) {
-      setQuickErr(err.message || 'Could not create contact');
+      setQuickErr(err.message || 'Could not save contact');
     } finally {
       setQuickSaving(false);
     }
   };
 
-  if (selected) {
-    return (
-      <div className="cp-selected">
-        <div className="psri-avatar">{(selected.name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')}</div>
-        <div className="cp-selected-info">
-          <div className="cp-selected-name">{selected.salutation} {selected.name}</div>
-          <div className="cp-selected-meta">{fullNumber(selected.mobileIsd || '+91', selected.mobile)}</div>
-        </div>
-        <button type="button" className="psri-btn-ghost" onClick={() => onSelect(null)}>Change</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="cp-wrap">
-      <input
-        className="psri-search-input"
-        style={{ maxWidth: 'none', width: '100%' }}
-        type="text"
-        placeholder="Search contact by name, mobile, or email…"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        autoFocus
-      />
-
-      {searching && <div className="cp-hint">Searching…</div>}
-
-      {!searching && searched && results.length > 0 && (
-        <div className="cp-results">
-          {results.map(c => (
-            <div key={c.id} className="cp-result-item" onClick={() => onSelect(c)}>
-              <div className="psri-avatar" style={{ width: 34, height: 34, fontSize: 12 }}>
-                {(c.name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')}
-              </div>
-              <div>
-                <div className="cp-result-name">{c.salutation} {c.name}</div>
-                <div className="cp-result-meta">{fullNumber(c.mobileIsd, c.mobile)} {c.contactType && `· ${c.contactType}`}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!searching && searched && results.length === 0 && (
-        <div className="cp-no-results">
-          {searchErr && <p className="psri-err-msg">{searchErr}</p>}
-          <p>No contact found for "{query}"</p>
-          <button type="button" className="psri-btn-primary" onClick={openQuickAdd}>+ Quick Add Contact</button>
-        </div>
-      )}
-
-      {showQuickAdd && (
+  // Rendered from both branches below (selected-contact card AND the search
+  // UI) — it must NOT live inside only one of those two `return`s, or
+  // there's no way to ever display it while the other branch is active.
+  // That was the actual bug: clicking Edit while a contact was selected set
+  // showQuickAdd=true correctly, but the early-return for the "selected"
+  // branch below meant the code that renders this modal was never reached —
+  // the popup silently couldn't show until something (e.g. Change) switched
+  // the component over to the other branch, at which point the already-set
+  // state suddenly rendered, looking like Change had triggered it.
+  const quickAddModal = showQuickAdd && (
         <div className="psri-modal-overlay" onClick={() => !quickSaving && setShowQuickAdd(false)}>
           <div className="psri-modal cp-quick-add-modal" onClick={e => e.stopPropagation()}>
-            <div className="psri-modal-title">Quick Add Contact</div>
+            <div className="psri-modal-title">{editingContactId ? 'Edit Contact' : 'Quick Add Contact'}</div>
             {quickErr && <div className="psri-err-banner">{quickErr}</div>}
             <div className="psri-form">
 
@@ -250,6 +356,12 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
                   isdValue={quickForm.altMobileIsd} numValue={quickForm.altMobile}
                   onIsdChange={v => setQuickForm(f => ({ ...f, altMobileIsd: v }))}
                   onNumChange={v => setQuickForm(f => ({ ...f, altMobile: v }))}
+                />
+                <PhoneField
+                  label="Alternate Mobile 2"
+                  isdValue={quickForm.altMobile2Isd} numValue={quickForm.altMobile2}
+                  onIsdChange={v => setQuickForm(f => ({ ...f, altMobile2Isd: v }))}
+                  onNumChange={v => setQuickForm(f => ({ ...f, altMobile2: v }))}
                 />
                 <PhoneField
                   label="Alternate Landline"
@@ -310,22 +422,29 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
                   {quickErrors.contactType && <p className="psri-err-msg">{quickErrors.contactType}</p>}
                 </div>
                 <div className="psri-field">
-                  <label>Source of Information</label>
-                  <select value={quickForm.source} onChange={e => setQuickForm(f => ({ ...f, source: e.target.value, subSource: '' }))}>
+                  <label>Source of Information {editingContactId && <span className="req">*</span>}</label>
+                  <select
+                    value={quickForm.source}
+                    onChange={e => setQuickForm(f => ({ ...f, source: e.target.value, subSource: '' }))}
+                    className={quickErrors.source ? 'err' : ''}
+                  >
                     <option value="">— Select —</option>
                     {getList('Source of Information').map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
+                  {quickErrors.source && <p className="psri-err-msg">{quickErrors.source}</p>}
                 </div>
                 <div className="psri-field">
-                  <label>Sub Source of Information</label>
+                  <label>Sub Source of Information {editingContactId && <span className="req">*</span>}</label>
                   <select
                     value={quickForm.subSource}
                     disabled={!quickForm.source}
                     onChange={e => setQuickForm(f => ({ ...f, subSource: e.target.value }))}
+                    className={quickErrors.subSource ? 'err' : ''}
                   >
                     <option value="">{quickForm.source ? '— Select —' : '— Select Source first —'}</option>
                     {quickForm.source ? getDependentOptions(getDependentValues, getList, 'Sub Source of Information', 'Source of Information', quickForm.source).map(s => <option key={s} value={s}>{s}</option>) : null}
                   </select>
+                  {quickErrors.subSource && <p className="psri-err-msg">{quickErrors.subSource}</p>}
                 </div>
                 <div className="psri-field">
                   <label>Language Preference</label>
@@ -336,7 +455,12 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
                 </div>
                 <div className="psri-field">
                   <label>Contact Assigned To</label>
-                  <select value={quickForm.assignedTo} onChange={e => setQuickForm(f => ({ ...f, assignedTo: e.target.value }))}>
+                  <select
+                    value={quickForm.assignedTo}
+                    onChange={e => setQuickForm(f => ({ ...f, assignedTo: e.target.value }))}
+                    disabled={!isAdmin}
+                    title={!isAdmin ? 'Contacts you add are assigned to you' : undefined}
+                  >
                     <option value="">— Unassigned —</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
                   </select>
@@ -354,13 +478,86 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
               </div>
 
               <div className="psri-modal-actions">
-                <button type="button" className="psri-btn-ghost" onClick={() => setShowQuickAdd(false)} disabled={quickSaving}>Cancel</button>
-                <button type="button" className="psri-btn-primary" onClick={handleQuickSave} disabled={quickSaving}>{quickSaving ? 'Creating…' : 'Create & Select'}</button>
+                {!editingContactId && isUnmatchedCallPhone && (
+                  <button type="button" className="psri-btn-ghost" onClick={switchToAttachExisting} disabled={quickSaving} style={{ marginRight: 'auto' }}>
+                    Not a new contact? Attach this number to an existing contact
+                  </button>
+                )}
+                <button type="button" className="psri-btn-ghost" onClick={() => { setShowQuickAdd(false); setEditingContactId(null); }} disabled={quickSaving}>Cancel</button>
+                <button type="button" className="psri-btn-primary" onClick={handleQuickSave} disabled={quickSaving}>
+                  {editingContactId ? (quickSaving ? 'Saving…' : 'Save Changes') : (quickSaving ? 'Creating…' : 'Create & Select')}
+                </button>
               </div>
             </div>
           </div>
         </div>
+  );
+
+  if (selected) {
+    return (
+      <>
+        <div className="cp-selected">
+          <div className="psri-avatar">{(selected.name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')}</div>
+          <div className="cp-selected-info">
+            <div className="cp-selected-name">{selected.salutation} {selected.name}</div>
+            <div className="cp-selected-meta">{fullNumber(selected.mobileIsd || '+91', selected.mobile)}</div>
+          </div>
+          <button type="button" className="psri-btn-ghost" onClick={openEditContact}>Edit</button>
+          <button type="button" className="psri-btn-ghost" onClick={openAddAnotherContact}>+ Add Another Contact</button>
+          <button type="button" className="psri-btn-ghost" onClick={() => onSelect(null)}>Change</button>
+        </div>
+        {quickAddModal}
+      </>
+    );
+  }
+
+  return (
+    <div className="cp-wrap">
+      {attachPhone && (
+        <div className="cp-hint" style={{ marginBottom: 8 }}>
+          Attaching <strong>{attachPhone}</strong> to an existing contact — search by name below, then pick the right one.
+          {' '}<button type="button" className="psri-btn-ghost" onClick={() => { const phone = attachPhone; setAttachPhone(null); setAttachErr(''); openQuickAdd(phone); }} disabled={attaching}>Cancel — add as new contact instead</button>
+        </div>
       )}
+      {attachErr && <p className="psri-err-msg">{attachErr}</p>}
+      <input
+        className="psri-search-input"
+        style={{ maxWidth: 'none', width: '100%' }}
+        type="text"
+        placeholder="Search contact by name, mobile, or email…"
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        autoFocus
+        disabled={attaching}
+      />
+
+      {(searching || attaching) && <div className="cp-hint">{attaching ? 'Attaching…' : 'Searching…'}</div>}
+
+      {!searching && !attaching && searched && results.length > 0 && (
+        <div className="cp-results">
+          {results.map(c => (
+            <div key={c.id} className="cp-result-item" onClick={() => (attachPhone ? attachAndSelect(c) : onSelect(c))}>
+              <div className="psri-avatar" style={{ width: 34, height: 34, fontSize: 12 }}>
+                {(c.name || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]?.toUpperCase()).join('')}
+              </div>
+              <div>
+                <div className="cp-result-name">{c.salutation} {c.name}</div>
+                <div className="cp-result-meta">{fullNumber(c.mobileIsd, c.mobile)} {c.contactType && `· ${c.contactType}`}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!searching && !attaching && searched && results.length === 0 && (
+        <div className="cp-no-results">
+          {searchErr && <p className="psri-err-msg">{searchErr}</p>}
+          <p>No contact found for "{query}"</p>
+          {!attachPhone && <button type="button" className="psri-btn-primary" onClick={openQuickAdd}>+ Quick Add Contact</button>}
+        </div>
+      )}
+
+      {quickAddModal}
     </div>
   );
 }

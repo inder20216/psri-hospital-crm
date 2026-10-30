@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS contacts (
   mobile            TEXT NOT NULL,
   alt_mobile_isd    TEXT DEFAULT '+91',
   alt_mobile        TEXT DEFAULT '',
+  alt_mobile2_isd   TEXT DEFAULT '+91',
+  alt_mobile2       TEXT DEFAULT '',
   landline_isd      TEXT DEFAULT '+91',
   landline          TEXT DEFAULT '',
   email             TEXT DEFAULT '',

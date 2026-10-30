@@ -54,6 +54,8 @@ CREATE TABLE contacts (
   mobile            VARCHAR(20)   NOT NULL,
   alt_mobile_isd    VARCHAR(6)    NOT NULL DEFAULT '+91',
   alt_mobile        VARCHAR(20)   NOT NULL DEFAULT '',
+  alt_mobile2_isd   VARCHAR(6)    NOT NULL DEFAULT '+91',
+  alt_mobile2       VARCHAR(20)   NOT NULL DEFAULT '',
   landline_isd      VARCHAR(6)    NOT NULL DEFAULT '+91',
   landline          VARCHAR(20)   NOT NULL DEFAULT '',
   email             VARCHAR(255)  NOT NULL DEFAULT '',
@@ -69,6 +71,7 @@ CREATE TABLE contacts (
   CONSTRAINT chk_contacts_email       CHECK (email = '' OR email REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$'),
   CONSTRAINT chk_contacts_mobile      CHECK (mobile REGEXP '^[0-9]+$'),
   CONSTRAINT chk_contacts_alt_mobile  CHECK (alt_mobile = '' OR alt_mobile REGEXP '^[0-9]+$'),
+  CONSTRAINT chk_contacts_alt_mobile2 CHECK (alt_mobile2 = '' OR alt_mobile2 REGEXP '^[0-9]+$'),
   CONSTRAINT chk_contacts_landline    CHECK (landline = '' OR landline REGEXP '^[0-9]+$'),
   INDEX idx_contacts_mobile    (mobile),
   INDEX idx_contacts_full_name (full_name)
@@ -140,6 +143,17 @@ CREATE TABLE cases (
 --   ADD COLUMN appreciation_approved TINYINT NULL DEFAULT NULL COMMENT 'NULL=pending, 1=approved, 0=rejected',
 --   ADD COLUMN appreciation_reviewed_by VARCHAR(100) NOT NULL DEFAULT '',
 --   ADD COLUMN appreciation_reviewed_at TIMESTAMP NULL DEFAULT NULL;
+
+-- ── THIRD MOBILE NUMBER (added post-creation, 2026-10-28) ──────
+-- A 4th phone slot on contacts (2 mobile + 1 alt mobile already existed —
+-- this adds a 2nd alt mobile, i.e. a 3rd mobile number overall). Searched
+-- and matched identically to the other number columns (contacts_list's
+-- LIKE search, DialerPanel's incoming-call lookup), so a call from this
+-- number also reopens the same contact once it's saved here.
+-- ALTER TABLE contacts
+--   ADD COLUMN alt_mobile2_isd VARCHAR(6)  NOT NULL DEFAULT '+91' AFTER alt_mobile,
+--   ADD COLUMN alt_mobile2     VARCHAR(20) NOT NULL DEFAULT ''    AFTER alt_mobile2_isd,
+--   ADD CONSTRAINT chk_contacts_alt_mobile2 CHECK (alt_mobile2 = '' OR alt_mobile2 REGEXP '^[0-9]+$');
 
 -- ============================================================
 -- To verify the tables were created correctly, run:
