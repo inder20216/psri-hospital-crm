@@ -35,13 +35,20 @@ const fireWorkflows = (path, body) => post(path, body, WF_BASE)
   .catch(err => console.warn('[workflows] trigger failed:', err.message));
 
 export const psri = {
-  getUsers:   ()      => get('psri-users'),
-  addUser:    (data)  => post('psri-user-add', data),
-  updateUser: (data)  => post('psri-user-update', data),
+  // Login lookup — goes straight through our own PHP+MySQL backend rather
+  // than the old n8n/Google Sheets relay, which was a single point of
+  // failure for every agent's sign-in.
+  getUsers:   ()      => get('psri-users', {}, WF_BASE),
+  addUser:    (data)  => post('psri-user-add', data, WF_BASE),
+  updateUser: (data)  => post('psri-user-update', data, WF_BASE),
 
   getContacts:   (q)    => get('psri-contacts', { q }, WF_BASE),
-  addContact:    (data) => post('psri-contact-add', data, WF_BASE).then(res => {
-    if (res && res.id) fireWorkflows('psri-contact-workflow-run', { contact: { ...data, id: res.id } });
+  // skipWorkflow: the missed-call/dropped-inbound auto-log flow (DialerPanel)
+  // already creates its own detailed case for this contact directly — firing
+  // the general "new contact" workflow too would add a second, generic
+  // duplicate case alongside it, which isn't wanted there.
+  addContact:    (data, { skipWorkflow = false } = {}) => post('psri-contact-add', data, WF_BASE).then(res => {
+    if (res && res.id && !skipWorkflow) fireWorkflows('psri-contact-workflow-run', { contact: { ...data, id: res.id } });
     return res;
   }),
   updateContact: (data) => post('psri-contact-update', data, WF_BASE),
@@ -101,10 +108,13 @@ export const psri = {
   // row once psri.pollSparkTG() resolves it. Also fire-and-forget.
   enrichCallLog: (data) => post('psri-call-log-enrich', data).catch(err => console.warn('[telephony] enrich failed:', err.message)),
 
-  // Asks SparkTG (via n8n) whether a call has finished processing yet —
-  // { success, found, record }. Never throws; caller treats a failed/empty
+  // Asks SparkTG whether a call has finished processing yet —
+  // { success, found, record }. Goes straight through our own PHP backend to
+  // SparkTG's API (sparktg.php) rather than via the old n8n relay, which was
+  // found (2026-10-16) to sometimes lose disposition data that genuinely
+  // existed on SparkTG's side. Never throws; caller treats a failed/empty
   // poll the same as "not found yet" and just retries.
-  pollSparkTG: (callId) => get('psri-sparktg-poll', { callId })
+  pollSparkTG: (callId) => get('psri-sparktg-poll', { callId }, WF_BASE)
     .catch(err => { console.warn('[telephony] poll failed:', err.message); return { success: false, found: false }; }),
 
   // Full call history (all calls, any outcome) — thin data API, no server-side

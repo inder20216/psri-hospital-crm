@@ -257,3 +257,27 @@ CREATE TABLE new_cases (
   INDEX idx_nc2_contact_id (contact_id),
   INDEX idx_nc2_created    (created)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ════════════════════════════════════════════════════════════════
+-- USERS  (added 2026-10-30, replaces the "Users" Google Sheets tab +
+-- its n8n webhooks — login (AuthContext) matches the signed-in
+-- Microsoft account's email against this table instead of calling
+-- out to n8n, which had become a single point of failure for every
+-- agent's login. password_hash is collected by the Users admin form
+-- but never checked anywhere — sign-in is Microsoft Entra ID only
+-- (see supportContent.js) — it's kept only so that form doesn't lose
+-- the field.
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE users (
+  user_id           VARCHAR(20)  NOT NULL PRIMARY KEY,           -- app-generated, e.g. U-1
+  name              VARCHAR(255) NOT NULL,
+  contact           VARCHAR(20)  NOT NULL DEFAULT '',             -- digits only
+  email             VARCHAR(255) NOT NULL,
+  password_hash     VARCHAR(255) NOT NULL DEFAULT '',
+  role              VARCHAR(20)  NOT NULL DEFAULT 'User',         -- 'Super Admin' | 'Admin' | 'User'
+  sparktg_extension VARCHAR(20)  NOT NULL DEFAULT '',
+  created           TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- MySQL-managed, don't pass on INSERT
+  CONSTRAINT chk_users_contact CHECK (contact = '' OR contact REGEXP '^[0-9]+$'),
+  CONSTRAINT chk_users_email   CHECK (email REGEXP '^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$'),
+  UNIQUE INDEX uq_users_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

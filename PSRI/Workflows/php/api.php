@@ -5,6 +5,12 @@
  * works both as  .../api.php/psri-workflow-get  (Apache/nginx PATH_INFO)
  * and behind  php -S localhost:8000 api.php  (router mode, local dev).
  *
+ *   GET  psri-users                → { success, users:[…] } (login lookup — AuthContext matches by email; no password check, Entra ID only)
+ *   POST psri-user-add    {name,contact,email,password,role,sparktgExtension} → { success, id, message } (400 + error on invalid/duplicate email)
+ *   POST psri-user-update {id,…}                                             → { success, id, message } (400 + error on invalid/not found/would leave zero Super Admins)
+ *
+ *   GET  psri-sparktg-poll?callId=   → { success, found, record? } (queries SparkTG's own API directly — see sparktg.php)
+ *
  *   GET  psri-contacts?q=                      → { success, contacts:[…] } (list/search; q empty = 50 most recent)
  *   POST psri-contact-add    {name,mobile,contactType,…}  → { success, id, message } (400 + error on invalid/duplicate)
  *   POST psri-contact-update {id,…}                       → { success, id, message } (400 + error on invalid/not found)
@@ -58,6 +64,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/runner.php';
+require_once __DIR__ . '/users.php';
 require_once __DIR__ . '/contacts.php';
 require_once __DIR__ . '/cases.php';
 require_once __DIR__ . '/reports.php';
@@ -65,6 +72,7 @@ require_once __DIR__ . '/prospects.php';
 require_once __DIR__ . '/picklist_suggestions.php';
 require_once __DIR__ . '/support_ai.php';
 require_once __DIR__ . '/wa.php';
+require_once __DIR__ . '/sparktg.php';
 
 if (PHP_SAPI === 'cli') {
     $cmd = $argv[1] ?? '';
@@ -176,6 +184,22 @@ if (!is_array($body)) $body = [];
 
 try {
     switch ($route) {
+        case 'psri-users':
+            api_out(['success' => true, 'users' => users_list()]);
+
+        case 'psri-user-add':
+            $res = users_add($body);
+            if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
+
+        case 'psri-user-update':
+            $res = users_update($body);
+            if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
+
+        case 'psri-sparktg-poll':
+            api_out(['success' => true] + sparktg_poll((string) ($_GET['callId'] ?? '')));
+
         case 'psri-contacts':
             api_out(['success' => true, 'contacts' => contacts_list((string) ($_GET['q'] ?? ''))]);
 
