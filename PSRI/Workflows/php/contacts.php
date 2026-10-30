@@ -61,6 +61,28 @@ function contacts_list(string $q): array {
 }
 
 /**
+ * Any of the three optional phone slots that's set to India (+91) and
+ * non-empty must be exactly 10 digits — not a partial/mistyped one. Mirrors
+ * the same check in ContactsPage.jsx / ContactPicker.jsx client-side.
+ */
+function contacts_validate_optional_phones(array $b, array $current = []): ?string {
+    $pick = static fn (string $key, string $col) => array_key_exists($key, $b) ? (string) $b[$key] : (string) ($current[$col] ?? '');
+    $slots = [
+        ['altMobileIsd', 'alt_mobile_isd', 'altMobile', 'alt_mobile', 'Alternate Mobile'],
+        ['altMobile2Isd', 'alt_mobile2_isd', 'altMobile2', 'alt_mobile2', 'Alternate Mobile 2'],
+        ['landlineIsd', 'landline_isd', 'landline', 'landline', 'Alternate Landline'],
+    ];
+    foreach ($slots as [$isdKey, $isdCol, $numKey, $numCol, $label]) {
+        $isd = $pick($isdKey, $isdCol) ?: '+91';
+        $num = trim($pick($numKey, $numCol));
+        if ($isd === '+91' && $num !== '' && !preg_match('/^\d{10}$/', $num)) {
+            return "{$label} must be exactly 10 digits";
+        }
+    }
+    return null;
+}
+
+/**
  * Ported 1:1 from n8n_psri_contact_add_mysql.json. Returns either
  * ['error' => string] or ['id' => string, 'message' => string].
  */
@@ -71,6 +93,7 @@ function contacts_add(array $b): array {
     if ($name === '') return ['error' => 'Full Name is required'];
     if (!preg_match('/^\d{10}$/', $mobile)) return ['error' => 'Valid 10-digit mobile is required'];
     if (empty($b['contactType'])) return ['error' => 'Contact Type is required'];
+    if ($err = contacts_validate_optional_phones($b)) return ['error' => $err];
 
     $pdo = psri_db();
 
@@ -144,6 +167,7 @@ function contacts_update(array $b): array {
     if ($name === '') return ['error' => 'Full Name is required'];
     if (!preg_match('/^\d{10}$/', $mobile)) return ['error' => 'Valid 10-digit mobile is required'];
     if (empty($contactType)) return ['error' => 'Contact Type is required'];
+    if ($err = contacts_validate_optional_phones($b, $current)) return ['error' => $err];
 
     $age = $pick('age', 'age');
 

@@ -231,6 +231,11 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
     const e = {};
     if (!quickForm.name.trim()) e.name = 'Name is required';
     if (!/^\d{10}$/.test(quickForm.mobile.trim())) e.mobile = 'Valid 10-digit mobile is required';
+    // The other phone slots are optional, but once filled for an India (+91)
+    // number they must be exactly 10 digits too — not a partial/mistyped one.
+    if (quickForm.altMobileIsd === '+91' && quickForm.altMobile.trim() && !/^\d{10}$/.test(quickForm.altMobile.trim())) e.altMobile = 'Must be exactly 10 digits';
+    if (quickForm.altMobile2Isd === '+91' && quickForm.altMobile2.trim() && !/^\d{10}$/.test(quickForm.altMobile2.trim())) e.altMobile2 = 'Must be exactly 10 digits';
+    if (quickForm.landlineIsd === '+91' && quickForm.landline.trim() && !/^\d{10}$/.test(quickForm.landline.trim())) e.landline = 'Must be exactly 10 digits';
     if (!quickForm.contactType) e.contactType = 'Select a contact type';
     if (quickForm.age && (Number(quickForm.age) < 0 || Number(quickForm.age) > 130)) e.age = 'Enter a valid age';
     // Only enforced when correcting an existing contact (editingContactId
@@ -356,18 +361,21 @@ export default function ContactPicker({ onSelect, selected, initialQuery = '', a
                   isdValue={quickForm.altMobileIsd} numValue={quickForm.altMobile}
                   onIsdChange={v => setQuickForm(f => ({ ...f, altMobileIsd: v }))}
                   onNumChange={v => setQuickForm(f => ({ ...f, altMobile: v }))}
+                  error={quickErrors.altMobile}
                 />
                 <PhoneField
                   label="Alternate Mobile 2"
                   isdValue={quickForm.altMobile2Isd} numValue={quickForm.altMobile2}
                   onIsdChange={v => setQuickForm(f => ({ ...f, altMobile2Isd: v }))}
                   onNumChange={v => setQuickForm(f => ({ ...f, altMobile2: v }))}
+                  error={quickErrors.altMobile2}
                 />
                 <PhoneField
                   label="Alternate Landline"
                   isdValue={quickForm.landlineIsd} numValue={quickForm.landline}
                   onIsdChange={v => setQuickForm(f => ({ ...f, landlineIsd: v }))}
                   onNumChange={v => setQuickForm(f => ({ ...f, landline: v }))}
+                  error={quickErrors.landline}
                 />
               </div>
               <div className="psri-field">

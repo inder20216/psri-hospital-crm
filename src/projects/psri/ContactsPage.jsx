@@ -123,6 +123,11 @@ export default function ContactsPage() {
     const e = {};
     if (!form.name.trim()) e.name = 'Name is required';
     if (!/^\d{10}$/.test(form.mobile.trim())) e.mobile = 'Valid 10-digit mobile is required';
+    // The other phone slots are optional, but once filled for an India (+91)
+    // number they must be exactly 10 digits too — not a partial/mistyped one.
+    if (form.altMobileIsd === '+91' && form.altMobile.trim() && !/^\d{10}$/.test(form.altMobile.trim())) e.altMobile = 'Must be exactly 10 digits';
+    if (form.altMobile2Isd === '+91' && form.altMobile2.trim() && !/^\d{10}$/.test(form.altMobile2.trim())) e.altMobile2 = 'Must be exactly 10 digits';
+    if (form.landlineIsd === '+91' && form.landline.trim() && !/^\d{10}$/.test(form.landline.trim())) e.landline = 'Must be exactly 10 digits';
     if (!form.contactType) e.contactType = 'Select a contact type';
     if (form.age && (Number(form.age) < 0 || Number(form.age) > 130)) e.age = 'Enter a valid age';
     return e;
@@ -232,18 +237,21 @@ export default function ContactsPage() {
               isdValue={form.altMobileIsd} numValue={form.altMobile}
               onIsdChange={v => setForm(f => ({ ...f, altMobileIsd: v }))}
               onNumChange={v => setForm(f => ({ ...f, altMobile: v }))}
+              error={errors.altMobile}
             />
             <PhoneField
               label="Alternate Mobile 2"
               isdValue={form.altMobile2Isd} numValue={form.altMobile2}
               onIsdChange={v => setForm(f => ({ ...f, altMobile2Isd: v }))}
               onNumChange={v => setForm(f => ({ ...f, altMobile2: v }))}
+              error={errors.altMobile2}
             />
             <PhoneField
               label="Alternate Landline"
               isdValue={form.landlineIsd} numValue={form.landline}
               onIsdChange={v => setForm(f => ({ ...f, landlineIsd: v }))}
               onNumChange={v => setForm(f => ({ ...f, landline: v }))}
+              error={errors.landline}
             />
           </div>
           <div className="psri-field">
