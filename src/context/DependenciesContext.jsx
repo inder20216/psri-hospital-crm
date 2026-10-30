@@ -43,6 +43,12 @@ export function DependenciesProvider({ children }) {
   const getMainValues = (mainField) =>
     [...new Set(dependencies.filter(d => d.mainField === mainField).map(d => d.mainValue))].sort((a, b) => a.localeCompare(b));
 
+  // All distinct Sub Values for a given Sub Field, across every Main Value —
+  // e.g. every Doctor name on file for Specialty→Doctor, not narrowed to one
+  // specialty. Used for "pick from the full list" dropdowns.
+  const getAllSubValues = (subField) =>
+    [...new Set(dependencies.filter(d => d.subField === subField).map(d => d.subValue))].sort((a, b) => a.localeCompare(b));
+
   const addDependency = async (mainField, mainValue, subField, subValue) => {
     try {
       await psri.addDependency({ mainField, mainValue, subField, subValue });
@@ -54,7 +60,7 @@ export function DependenciesProvider({ children }) {
   };
 
   return (
-    <DependenciesContext.Provider value={{ dependencies, loading, error, getDependentValues, getMainValues, addDependency, refresh }}>
+    <DependenciesContext.Provider value={{ dependencies, loading, error, getDependentValues, getMainValues, getAllSubValues, addDependency, refresh }}>
       {children}
     </DependenciesContext.Provider>
   );

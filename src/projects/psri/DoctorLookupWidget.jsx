@@ -1,8 +1,38 @@
 import { useState, useEffect, useRef } from 'react';
 import { psri } from '../../api/psri';
+import { usePicklists } from '../../context/PicklistsContext';
+import { useDependencies } from '../../context/DependenciesContext';
 import './Psri.css';
 
+// A plain <select> — closed until clicked, same as any other dropdown — so an
+// agent can pick an exact name instead of free-typing one and risking a typo
+// that silently falls through to a fuzzy/no match. Picking a value just feeds
+// the same `query` state manual typing does, so results render identically
+// either way. Always shown with the placeholder selected (not bound to
+// `query`) so it works as a repeatable "jump to…" control rather than a
+// second, harder-to-keep-in-sync copy of the text input's value.
+function PickFromListSelect({ label, options, onPick }) {
+  if (!options.length) return null;
+  return (
+    <select
+      className="psri-search-input"
+      style={{ maxWidth: 'none', width: '100%', marginTop: 6 }}
+      value=""
+      onChange={e => { if (e.target.value) onPick(e.target.value); }}
+    >
+      <option value="">{label}</option>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
 function DoctorSearchTab() {
+  // Doctor names mostly live as Specialty→Doctor dependency pairs (Admin >
+  // Dependencies), not a flat "Doctor" picklist — combine both sources so
+  // the dropdown works however the admin happened to enter the data.
+  const { getList } = usePicklists();
+  const { getAllSubValues } = useDependencies();
+  const doctorOptions = [...new Set([...getAllSubValues('Doctor'), ...getList('Doctor')])].sort((a, b) => a.localeCompare(b));
   const [query, setQuery]         = useState('');
   const [results, setResults]     = useState([]);
   const [fuzzyMatch, setFuzzyMatch] = useState(false);
@@ -34,6 +64,11 @@ function DoctorSearchTab() {
         placeholder="Search doctor name…"
         value={query}
         onChange={e => { setQuery(e.target.value); setActiveDoctor(null); }}
+      />
+      <PickFromListSelect
+        label="— Or pick a doctor from the list —"
+        options={doctorOptions}
+        onPick={name => { setQuery(name); setActiveDoctor(null); }}
       />
       {searching && <p className="cp-hint">Searching…</p>}
       {searchErr && <p className="psri-err-msg">{searchErr}</p>}
@@ -70,6 +105,8 @@ function DoctorSearchTab() {
 }
 
 function SpecialtySearchTab() {
+  const { getList } = usePicklists();
+  const specialtyOptions = getList('Specialty');
   const [query, setQuery]     = useState('');
   const [result, setResult]   = useState(null);
   const [searching, setSearching] = useState(false);
@@ -101,6 +138,11 @@ function SpecialtySearchTab() {
         placeholder="Search specialty…"
         value={query}
         onChange={e => { setQuery(e.target.value); setActiveDoctor(null); }}
+      />
+      <PickFromListSelect
+        label="— Or pick a specialty from the list —"
+        options={specialtyOptions}
+        onPick={name => { setQuery(name); setActiveDoctor(null); }}
       />
       {searching && <p className="cp-hint">Searching…</p>}
       {searchErr && <p className="psri-err-msg">{searchErr}</p>}
