@@ -281,3 +281,89 @@ CREATE TABLE users (
   CONSTRAINT chk_users_email   CHECK (email REGEXP '^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$'),
   UNIQUE INDEX uq_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ════════════════════════════════════════════════════════════════
+-- PICKLISTS  (added 2026-10-30, replaces the "Picklists" Google Sheets tab +
+-- its n8n webhooks.) (list_name, value) is unique under this table's
+-- utf8mb4_unicode_ci collation, i.e. case-insensitively — same as the old
+-- n8n workflow's toLowerCase() duplicate check.
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE picklists (
+  id        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  list_name VARCHAR(100)    NOT NULL,
+  value     VARCHAR(255)    NOT NULL,
+  created   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- MySQL-managed, don't pass on INSERT
+  UNIQUE INDEX uq_picklists_list_value (list_name, value)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ════════════════════════════════════════════════════════════════
+-- DEPENDENCIES  (added 2026-10-30, replaces the "Dependencies" Google Sheets
+-- tab + its n8n webhooks.) Feeds every dependent dropdown on the Cases form
+-- (e.g. Specialty -> Doctor); (mainField,mainValue,subField,subValue) is
+-- unique case-insensitively, same as the old n8n duplicate check.
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE dependencies (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  main_field VARCHAR(100)    NOT NULL,
+  main_value VARCHAR(255)    NOT NULL,
+  sub_field  VARCHAR(100)    NOT NULL,
+  sub_value  VARCHAR(255)    NOT NULL,
+  created    TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- MySQL-managed, don't pass on INSERT
+  UNIQUE INDEX uq_dependencies_pair (main_field, main_value, sub_field, sub_value)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ════════════════════════════════════════════════════════════════
+-- DOCTORS  (added 2026-10-30, replaces the "Doctors" Google Sheets tab +
+-- its n8n webhooks — the Doctor & Specialty Lookup widget's doctor-search
+-- and specialty-search both read from this table directly.) Free-form long
+-- text columns (opd_schedule, specific_protocol, …) are TEXT since the
+-- sheet carries multi-line scheduling notes.
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE doctors (
+  sr_no                 INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  doctor_name           VARCHAR(255) NOT NULL DEFAULT '',
+  specialty             VARCHAR(150) NOT NULL DEFAULT '',
+  education1            VARCHAR(255) NOT NULL DEFAULT '',
+  education2            VARCHAR(255) NOT NULL DEFAULT '',
+  education3            VARCHAR(255) NOT NULL DEFAULT '',
+  other_qualifications  TEXT         NULL,
+  experience            VARCHAR(50)  NOT NULL DEFAULT '',
+  languages_known       VARCHAR(255) NOT NULL DEFAULT '',
+  centre                VARCHAR(255) NOT NULL DEFAULT '',
+  opd_schedule          TEXT         NULL,
+  consultation_charges  VARCHAR(100) NOT NULL DEFAULT '',
+  walk_in_protocol      VARCHAR(100) NOT NULL DEFAULT '',
+  walk_ins_allowed      VARCHAR(100) NOT NULL DEFAULT '',
+  cghs_protocol         VARCHAR(100) NOT NULL DEFAULT '',
+  specific_protocol     TEXT         NULL,
+  block                 VARCHAR(100) NOT NULL DEFAULT '',
+  status                VARCHAR(50)  NOT NULL DEFAULT '',
+  INDEX idx_doctors_specialty (specialty)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ════════════════════════════════════════════════════════════════
+-- GUIDANCE  (added 2026-10-30, replaces the "Guidance" Google Sheets tab +
+-- its n8n webhook.) Per (Call For, Field) tip + suggested script shown on
+-- the Cases form. Read-only from the app — admin-edited directly in the
+-- table.
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE guidance (
+  id       BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  call_for VARCHAR(100)    NOT NULL DEFAULT '',
+  field    VARCHAR(100)    NOT NULL DEFAULT '',
+  tip      TEXT            NULL,
+  script   TEXT            NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ════════════════════════════════════════════════════════════════
+-- SPECIALTY SUMMARIES  (added 2026-10-30, replaces the "SpecialtySummaries"
+-- Google Sheets tab + its n8n webhook.) A cached bilingual blurb per
+-- specialty for CasesPage's getSummary(); read-only from the app, no data
+-- migrated yet (the sheet's contents weren't available at migration time) —
+-- import later with INSERT/ON DUPLICATE KEY UPDATE once exported.
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE specialty_summaries (
+  specialty  VARCHAR(150) NOT NULL PRIMARY KEY,
+  summary_en TEXT         NULL,
+  summary_hi TEXT         NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

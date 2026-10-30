@@ -24,6 +24,19 @@
  *   POST psri-prospect-update {id,callStatus,leadStatus,finalStatus,nextCallAt,remarks,assignedTo,agentId,agentName} → { success, id, message }
  *   POST psri-prospect-call-attempt {id,agentId,agentName} → { success, id, message }
  *   GET  psri-prospect-activity?prospectId= → { success, activity:[…] }
+ *
+ *   GET  psri-picklists                    → { success, picklists:{listName:[values…]} }
+ *   POST psri-picklist-add {listName,value}            → { success, listName, value, message } (400 + error on duplicate)
+ *   GET  psri-dependencies                 → { success, dependencies:[{mainField,mainValue,subField,subValue}], count }
+ *   POST psri-dependency-add {mainField,mainValue,subField,subValue} → { success, …, message } (400 + error on duplicate)
+ *   POST psri-doctor-search {query,searchBy}           → { success, count, fuzzyMatch, results:[…] } (searchBy: 'doctor'|'specialty'; substring match, Levenshtein fuzzy fallback)
+ *   POST psri-specialty-search {specialty}             → { success, fuzzyMatch, groups:[{specialty,doctors:[…],summaryEn,summaryHi}] } (live OpenAI explanation when exactly one group matches)
+ *   GET  psri-guidance                     → { success, guidance:[{callFor,field,tip,script}] }
+ *   GET  psri-specialty-summaries          → { success, summaries:[{specialty,en,hi}] }
+ *   POST psri-summary-polish {summary,callFor?,channel?,typeOfEnquiry?,specialty?} → { success, polished } (400 if summary missing; falls back to original text on AI failure)
+ *   POST psri-case-validate {…case fields}             → { success, flags:[…], isHighValue, highValueReason, suggestNextCall, nextCallSuggestion } (never errors — a QA hint, not a save gate)
+ *   POST psri-procedure-polish {value,existingValues?}  → { success, corrected, likelyDuplicateOf } (400 if value missing)
+ *
  *   POST psri-picklist-suggest {listName,value,agentId,agentName,force?} → { success, id, message } OR
  *                                             { success:false, needsConfirmation:true, similar:[…] } (HTTP 200, not an error — ask the agent, then resend with force:true)
  *   GET  psri-picklist-suggestions?status= → { success, suggestions:[…] } (status: pending|approved|rejected, blank=all)
@@ -69,6 +82,11 @@ require_once __DIR__ . '/contacts.php';
 require_once __DIR__ . '/cases.php';
 require_once __DIR__ . '/reports.php';
 require_once __DIR__ . '/prospects.php';
+require_once __DIR__ . '/picklists.php';
+require_once __DIR__ . '/dependencies.php';
+require_once __DIR__ . '/doctors.php';
+require_once __DIR__ . '/reference.php';
+require_once __DIR__ . '/ai_polish.php';
 require_once __DIR__ . '/picklist_suggestions.php';
 require_once __DIR__ . '/support_ai.php';
 require_once __DIR__ . '/wa.php';
@@ -263,6 +281,48 @@ try {
 
         case 'psri-prospect-activity':
             api_out(['success' => true, 'activity' => prospects_activity_list((string) ($_GET['prospectId'] ?? ''))]);
+
+        case 'psri-picklists':
+            api_out(['success' => true, 'picklists' => picklists_list()]);
+
+        case 'psri-picklist-add':
+            $res = picklists_add($body);
+            if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
+
+        case 'psri-dependencies':
+            $deps = dependencies_list();
+            api_out(['success' => true, 'dependencies' => $deps, 'count' => count($deps)]);
+
+        case 'psri-dependency-add':
+            $res = dependencies_add($body);
+            if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
+
+        case 'psri-doctor-search':
+            api_out(doctors_search($body));
+
+        case 'psri-specialty-search':
+            api_out(specialty_search($body));
+
+        case 'psri-guidance':
+            api_out(['success' => true, 'guidance' => guidance_list()]);
+
+        case 'psri-specialty-summaries':
+            api_out(['success' => true, 'summaries' => specialty_summaries_list()]);
+
+        case 'psri-summary-polish':
+            $res = ps_summary_polish($body);
+            if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
+
+        case 'psri-case-validate':
+            api_out(['success' => true] + ps_case_validate($body));
+
+        case 'psri-procedure-polish':
+            $res = ps_procedure_polish($body);
+            if (isset($res['error'])) api_out(['success' => false, 'error' => $res['error']], 400);
+            api_out(['success' => true] + $res);
 
         case 'psri-picklist-suggest':
             $res = ps_suggest($body);

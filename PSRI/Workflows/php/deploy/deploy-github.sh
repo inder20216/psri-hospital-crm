@@ -85,7 +85,7 @@ ok "backup kept"
 
 # ── Pull the current code from GitHub ────────────────────────────────────────
 say "Fetching code from GitHub"
-FILES="api.php cases.php contacts.php users.php db.php picklist_suggestions.php prospects.php reports.php runner.php support_ai.php support_kb.md wa.php config.example.php deploy/server-setup.sh graphs/new-case.json graphs/new-contact.json graphs/payload-case.json graphs/payload-contact.json"
+FILES="api.php cases.php contacts.php users.php picklists.php dependencies.php doctors.php reference.php ai_polish.php db.php picklist_suggestions.php prospects.php reports.php runner.php support_ai.php support_kb.md wa.php config.example.php deploy/server-setup.sh graphs/new-case.json graphs/new-contact.json graphs/payload-case.json graphs/payload-contact.json"
 FETCHED=0
 for rel in $FILES; do
   mkdir -p "$APP/$(dirname "$rel")"
@@ -104,7 +104,7 @@ ok "$FETCHED files installed"
 # ── Lint before running anything ─────────────────────────────────────────────
 say "Linting"
 if command -v php >/dev/null; then
-  for f in api.php runner.php wa.php cases.php contacts.php users.php db.php picklist_suggestions.php prospects.php reports.php support_ai.php; do
+  for f in api.php runner.php wa.php cases.php contacts.php users.php picklists.php dependencies.php doctors.php reference.php ai_polish.php db.php picklist_suggestions.php prospects.php reports.php support_ai.php; do
     [ -f "$APP/$f" ] || continue
     php -l "$APP/$f" >/dev/null 2>&1 || die "syntax error in $f — restore: rm -rf '$APP' && cp -a '$BACKUP' '$APP'"
     printf '   ok    %s\n' "$f"

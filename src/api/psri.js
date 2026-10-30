@@ -53,8 +53,8 @@ export const psri = {
   }),
   updateContact: (data) => post('psri-contact-update', data, WF_BASE),
 
-  getPicklists:     ()    => get('psri-picklists'),
-  addPicklistValue: (data) => post('psri-picklist-add', data),
+  getPicklists:     ()    => get('psri-picklists', {}, WF_BASE),
+  addPicklistValue: (data) => post('psri-picklist-add', data, WF_BASE),
 
   // Accepts either a bare search string or an options object ({ q, status })
   // — status is an exact-match filter (e.g. 'Incomplete'), q is a fuzzy search.
@@ -70,14 +70,14 @@ export const psri = {
   // Incomplete drafts). The runner ignores repeat calls for the same case.
   runCaseWorkflows: (data) => (data && data.id ? fireWorkflows('psri-case-workflow-run', { case: data }) : Promise.resolve()),
 
-  getDependencies: ()    => get('psri-dependencies'),
-  addDependency:   (data) => post('psri-dependency-add', data),
+  getDependencies: ()    => get('psri-dependencies', {}, WF_BASE),
+  addDependency:   (data) => post('psri-dependency-add', data, WF_BASE),
 
-  polishSummary: (data) => post('psri-summary-polish', data),
-  validateCase:  (data) => post('psri-case-validate', data),
+  polishSummary: (data) => post('psri-summary-polish', data, WF_BASE),
+  validateCase:  (data) => post('psri-case-validate', data, WF_BASE),
   // Fixes spelling/casing on a newly-typed picklist value and flags if it
   // looks like an existing option under a different name.
-  polishProcedureName: (data) => post('psri-procedure-polish', data),
+  polishProcedureName: (data) => post('psri-procedure-polish', data, WF_BASE),
 
   // Agent-suggested new picklist values (currently used for Name of
   // Procedure) — sit pending until an Admin approves/rejects them.
@@ -93,11 +93,11 @@ export const psri = {
   askSupport: (question, history) => post('psri-support-ask', { question, history }, WF_BASE)
     .catch(err => ({ success: false, error: err.message })),
 
-  getSpecialtySummaries: () => get('psri-specialty-summaries'),
-  getGuidance:           () => get('psri-guidance'),
+  getSpecialtySummaries: () => get('psri-specialty-summaries', {}, WF_BASE),
+  getGuidance:           () => get('psri-guidance', {}, WF_BASE),
 
-  searchDoctors:   (query, searchBy) => post('psri-doctor-search', { query, searchBy }),
-  searchSpecialty: (specialty)       => post('psri-specialty-search', { specialty }),
+  searchDoctors:   (query, searchBy) => post('psri-doctor-search', { query, searchBy }, WF_BASE),
+  searchSpecialty: (specialty)       => post('psri-specialty-search', { specialty }, WF_BASE),
 
   // Telephony (call_logs) — all n8n workflows now, same base as everything else.
   // Fire-and-forget: a call event must never block call handling, so this
